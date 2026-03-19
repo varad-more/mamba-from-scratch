@@ -1,34 +1,89 @@
-# Mamba From Scratch: Math → PyTorch → Kernel → System
+# Mamba From Scratch
 
-A practical, test-first implementation of Mamba concepts from first principles.
+A from-scratch implementation of the core ideas behind **Mamba**: continuous-time state space models, selective scan, parallel scan, Triton kernel scaffolding, parity checks against the official HuggingFace model, and benchmark / profiling utilities.
 
-This repo is built to answer two questions:
-1. **Can we re-implement the core selective SSM mechanics correctly?**
-2. **Can we explain the systems tradeoff (memory vs compute) with reproducible evidence?**
-
----
-
-## What this project proves
-
-- Rebuilt selective scan recurrence with clear tensor contracts and tests.
-- Implemented a minimal Mamba block in PyTorch.
-- Added parallel/chunked scan implementations and SSD-style prototype.
-- Added benchmark harnesses and roofline tooling.
-- Kept kernel entry points API-stable with CPU-safe fallback.
-
-> Environment note: this workspace is CPU-only. Triton/CUDA execution is scaffolded and falls back to validated PyTorch reference paths unless GPU support is available.
+This repo is meant to be both:
+- a **learning artifact** you can read end-to-end, and
+- an **engineering artifact** you can run, test, benchmark, and extend.
 
 ---
 
-## Status snapshot
+## What this repo does
 
-- ✅ Core reference modules implemented
-- ✅ Unit + parity + end-to-end tests implemented
-- ✅ Triton fused forward path added for both shared and channel-specific `B/C` layouts
-- ✅ Official HF parity path working for `state-spaces/mamba-130m-hf` mixer extraction
-- ✅ `pytest`: **15 passed, 2 skipped** by default (`1` GPU-only, `1` official-parity slow test)
-- ✅ Notebooks generated for each major milestone
-- ✅ Benchmark scripts + result-driven figure rendering working
+This project walks through the Mamba stack in layers:
+
+1. **SSM math**
+   - zero-order-hold discretization
+   - continuous → discrete recurrence
+2. **Reference implementation**
+   - selective scan in PyTorch
+   - minimal `MambaBlock`
+3. **Algorithmic acceleration**
+   - sequential scan
+   - parallel / chunked affine scan
+   - SSD-style prototype
+4. **Kernel path**
+   - Triton fused selective scan entry point
+   - safe fallback to the PyTorch reference implementation
+5. **System validation**
+   - official model parity checks
+   - scan benchmarks
+   - inference comparison harness
+   - roofline / figure generation
+
+---
+
+## Current status
+
+- ✅ Core math + reference modules implemented
+- ✅ Minimal Mamba block implemented in PyTorch
+- ✅ Parallel / chunked scan utilities implemented
+- ✅ Triton fused forward path added
+- ✅ Supports both shared and channel-specific `B/C` layouts in the fused path
+- ✅ Official parity path working for `state-spaces/mamba-130m-hf`
+- ✅ Benchmarks and result-driven figure generation implemented
+- ✅ Colab/GPU runbook + one-shot validation runner added
+- ✅ Test suite passing: **15 passed, 2 skipped** by default
+
+> This workspace is CPU-only, so the repository code is complete up to the point where **real CUDA execution and hardware benchmarks** are required. GPU-specific performance claims should be generated on Colab or another CUDA machine using the provided runbook.
+
+---
+
+## Key validation results
+
+### 1) Official model parity
+
+Saved sample parity runs show exact output match for sampled layers from `state-spaces/mamba-130m-hf`:
+
+- `benchmarks/results/official_parity.layer0.cpu.json`
+- `benchmarks/results/official_parity.sample_layers.cpu.json`
+
+Current sample result:
+- sampled layers: `0, 5, 23`
+- max absolute error: **0.0**
+- mean absolute error: **0.0**
+
+That means the local `MambaBlock` can successfully load official mixer weights and reproduce the corresponding HuggingFace mixer outputs for the sampled layers.
+
+### 2) CPU scan benchmark sample
+
+From `benchmarks/results/scan_results.cpu.json` for a small sample run (`B=1, D=8, N=4, L=64`):
+
+- reference p50 latency: **3.89 ms**
+- naive p50 latency: **4.06 ms**
+- fused p50 latency: **3.84 ms**
+
+These are **sanity / plumbing results**, not final performance claims. Real kernel evaluation should be done on GPU.
+
+### 3) CPU inference sample
+
+From `benchmarks/results/inference_results.cpu.json`:
+
+- CPU comparison is wired up and reproducible
+- Mamba parity / loading path works
+- memory and latency outputs are captured end-to-end
+
+These numbers should be treated as **CPU functional validation**, not the final systems story. The real value of the repo comes from running the GPU validation flow.
 
 ---
 
@@ -36,8 +91,9 @@ This repo is built to answer two questions:
 
 ```text
 mamba-from-scratch/
-├── PROJECT_PLAN.md                 # Full implementation plan (developer + showcase)
-├── CONTRACTS.md                    # Shape/dtype/tolerance contracts
+├── PROJECT_PLAN.md                 # Full implementation plan
+├── CONTRACTS.md                    # Shape / dtype / tolerance contracts
+├── COLAB_RUNBOOK.md                # How to run the GPU-dependent parts on Colab
 ├── README.md
 ├── pyproject.toml
 ├── requirements.txt
@@ -61,7 +117,8 @@ mamba-from-scratch/
 ├── benchmarks/
 │   ├── benchmark_scan.py
 │   ├── benchmark_inference.py
-│   └── roofline.py
+│   ├── roofline.py
+│   └── results/
 ├── scripts/
 │   ├── create_notebooks.py
 │   ├── make_placeholder_figures.py
@@ -72,29 +129,40 @@ mamba-from-scratch/
 └── tests/
 ```
 
+### Directory guide
+
+- `src/mamba_minimal/` — readable reference implementation
+- `kernels/` — Triton / kernel-facing entry points
+- `tests/` — correctness, parity, and regression coverage
+- `benchmarks/` — reproducible timing / memory scripts
+- `scripts/` — notebook generation, parity, figure rendering, validation runners
+- `figures/` — generated figures used in the README / analysis
+
 ---
 
 ## Quickstart
 
-### 1) Create and activate env
+### 1) Create an environment
 
 ```bash
 uv venv .venv
 source .venv/bin/activate
 ```
 
-### 2) Install dependencies (CPU-friendly)
+### 2) Install dependencies
+
+CPU-friendly setup:
 
 ```bash
 uv pip install --index-url https://download.pytorch.org/whl/cpu torch
 uv pip install -e .[dev]
 ```
 
-Optional:
+Optional extras:
 
 ```bash
-uv pip install -e .[bench]     # inference + benchmark extras
-uv pip install -e .[kernel]    # Triton (Linux/CUDA environments)
+uv pip install -e .[bench]     # transformers / accelerate / psutil
+uv pip install -e .[kernel]    # Triton (Linux + CUDA environments)
 ```
 
 ### 3) Run tests
@@ -105,141 +173,151 @@ pytest -q
 
 ---
 
-## Phase-by-phase execution commands
+## Core commands
 
-### Phase 1: core math + recurrence checks
-
-```bash
-pytest tests/test_discretization.py tests/test_selective_scan.py -q
-```
-
-### Phase 2: scan algorithm checks
-
-```bash
-pytest tests/test_parallel_scan.py -q
-```
-
-### Phase 3: kernel wrapper parity checks
-
-```bash
-pytest tests/test_kernel_parity.py -q
-```
-
-### Phase 4: end-to-end block behavior
-
-```bash
-pytest tests/test_end_to_end.py -q
-```
-
-### Full suite
+### Run the full local test suite
 
 ```bash
 pytest -q
 ```
 
----
-
-## Benchmarks and profiling
-
-### Scan benchmark
+### Run phase-specific checks
 
 ```bash
-python benchmarks/benchmark_scan.py --device auto --batch 2 --channels 64 --state 16 --length 256
-# save directly to JSON
-python benchmarks/benchmark_scan.py --device auto --batch 2 --channels 64 --state 16 --length 256 --output benchmarks/results/scan_results.gpu.json
+pytest tests/test_discretization.py tests/test_selective_scan.py -q
+pytest tests/test_parallel_scan.py -q
+pytest tests/test_kernel_parity.py -q
+pytest tests/test_end_to_end.py -q
 ```
 
-Example output file in this repo:
-- `benchmarks/results/scan_results.cpu.json`
-
-### Roofline figure
+### Run the scan benchmark
 
 ```bash
-python benchmarks/roofline.py --output figures/roofline.png
+python benchmarks/benchmark_scan.py \
+  --device auto \
+  --batch 2 \
+  --channels 64 \
+  --state 16 \
+  --length 256
 ```
 
-### Inference benchmark (downloads models)
+Save output directly to JSON:
 
 ```bash
-python benchmarks/benchmark_inference.py --device auto --new-tokens 32
-# save directly to JSON
-python benchmarks/benchmark_inference.py --device auto --new-tokens 32 --output benchmarks/results/inference_results.gpu.json
+python benchmarks/benchmark_scan.py \
+  --device auto \
+  --batch 2 \
+  --channels 64 \
+  --state 16 \
+  --length 256 \
+  --output benchmarks/results/scan_results.gpu.json
 ```
 
-Example output files in this repo:
-- `benchmarks/results/inference_results.cpu.json` (CPU comparison: `mamba-130m-hf` vs `gpt2`)
-- `benchmarks/results/inference_results.tiny.cpu.json` (tiny model smoke benchmark)
-
-### Official parity check against HuggingFace Mamba
+### Run the inference benchmark
 
 ```bash
-python scripts/official_parity.py --model state-spaces/mamba-130m-hf --layer 0 --seq-len 8 --batch 1 --device auto --json
-# or sweep multiple layers + save to disk
-python scripts/official_parity.py --model state-spaces/mamba-130m-hf --layer 0,5,23 --seq-len 4 --batch 1 --device auto --json --output benchmarks/results/official_parity.gpu.json
+python benchmarks/benchmark_inference.py \
+  --device auto \
+  --new-tokens 32
 ```
 
-This verifies that the local `MambaBlock` can load an official mixer state dict and reproduce its output.
-
-Sample saved results:
-- `benchmarks/results/official_parity.layer0.cpu.json` → current sample run reports `max_abs_error = 0.0`
-- `benchmarks/results/official_parity.sample_layers.cpu.json` → sample multi-layer sweep (`0,5,23`) also reports `max_abs_error = 0.0`
-
-### Text generation smoke test
+Save output directly to JSON:
 
 ```bash
-python -m mamba_minimal.generate "Mamba is useful because" --model state-spaces/mamba-130m-hf --max-new-tokens 32 --device auto
+python benchmarks/benchmark_inference.py \
+  --device auto \
+  --new-tokens 32 \
+  --output benchmarks/results/inference_results.gpu.json
 ```
 
----
+### Run official parity against HuggingFace Mamba
 
-## Notebooks
-
-Notebooks are generated and stored under `notebooks/`:
-- `01_ssm_basics.ipynb`
-- `02_selective_scan.ipynb`
-- `03_parallel_scan.ipynb`
-- `05_profiling.ipynb`
-- `07_inference_comparison.ipynb`
-
-Regenerate notebooks:
+Single layer:
 
 ```bash
-python scripts/create_notebooks.py
+python scripts/official_parity.py \
+  --model state-spaces/mamba-130m-hf \
+  --layer 0 \
+  --seq-len 8 \
+  --batch 1 \
+  --device auto \
+  --json
 ```
 
----
+Multi-layer sweep:
 
-## Figures
+```bash
+python scripts/official_parity.py \
+  --model state-spaces/mamba-130m-hf \
+  --layer 0,5,23 \
+  --seq-len 4 \
+  --batch 1 \
+  --device auto \
+  --json \
+  --output benchmarks/results/official_parity.gpu.json
+```
 
-Generated figure assets are in `figures/`:
-- `roofline.png`
-- `memory_scaling.png`
-- `throughput_comparison.png`
-- `architecture.png`
-- `scan_benchmark_cpu.png`
-- `inference_comparison_cpu.png`
-- `scan_benchmark_gpu.png` (generated after GPU validation)
-- `inference_comparison_gpu.png` (generated after GPU validation)
-
-Render result-driven figures from saved benchmark JSON:
+### Render figures from saved benchmark results
 
 ```bash
 python scripts/render_benchmark_figures.py
 ```
 
-Run the bundled GPU validation flow (great for Colab):
+### Generate notebooks
+
+```bash
+python scripts/create_notebooks.py
+```
+
+### Text generation smoke test
+
+```bash
+python -m mamba_minimal.generate \
+  "Mamba is useful because" \
+  --model state-spaces/mamba-130m-hf \
+  --max-new-tokens 32 \
+  --device auto
+```
+
+---
+
+## GPU / Colab execution
+
+The remaining hardware-dependent part of the project is already wired up.
+
+If you want to run the real CUDA validation flow on Google Colab, use:
+- `COLAB_RUNBOOK.md` for setup instructions
+- `scripts/run_gpu_validation.py` for one-shot execution
+
+### One-command Colab / GPU validation
 
 ```bash
 python scripts/run_gpu_validation.py --device auto --parity-layers 0,5,23
 ```
 
-> `scan_benchmark_cpu.png` and `inference_comparison_cpu.png` are generated from actual saved result files in `benchmarks/results/`. `memory_scaling.png` and `throughput_comparison.png` remain illustrative placeholders until replaced with full target-hardware production runs.
+This generates:
+- `benchmarks/results/scan_results.gpu.json`
+- `benchmarks/results/official_parity.gpu.json`
+- `benchmarks/results/inference_results.gpu.json`
+- GPU figure outputs in `figures/`
+
+If you want explicit model control:
+
+```bash
+python scripts/run_gpu_validation.py \
+  --device auto \
+  --mamba-model state-spaces/mamba-130m-hf \
+  --baseline-model gpt2 \
+  --parity-model state-spaces/mamba-130m-hf \
+  --parity-layers 0,5,23
+```
 
 ---
 
 ## Triton fused path: current support boundary
 
-The current fused Triton kernel supports these shape families:
+The current fused Triton kernel supports:
+
 - `u`, `delta`: `(B, D, L)`
 - `A`: `(D, N)`
 - shared `B`, `C`: `(B, N, L)`
@@ -247,50 +325,63 @@ The current fused Triton kernel supports these shape families:
 - optional `D_skip`: `(D,)`
 - optional gate `z`: `(B, D, L)`
 
-If inputs fall outside this boundary, the code automatically falls back to the PyTorch reference implementation.
+If inputs fall outside this boundary, execution automatically falls back to the PyTorch reference implementation.
 
-This means the kernel path is now **real and broader than the initial draft**, while still preserving correctness-first fallback behavior.
+This is intentional: **correctness first, broader kernel coverage second**.
+
+---
+
+## Figures
+
+Generated figure assets live in `figures/`:
+
+- `architecture.png`
+- `roofline.png`
+- `scan_benchmark_cpu.png`
+- `inference_comparison_cpu.png`
+- `scan_benchmark_gpu.png` *(generated after GPU validation)*
+- `inference_comparison_gpu.png` *(generated after GPU validation)*
+- `memory_scaling.png` *(illustrative placeholder)*
+- `throughput_comparison.png` *(illustrative placeholder)*
+
+Important note:
+- `scan_benchmark_cpu.png` and `inference_comparison_cpu.png` are generated from actual saved results
+- `memory_scaling.png` and `throughput_comparison.png` are still illustrative placeholders until replaced with measured GPU production runs
 
 ---
 
 ## Validation strategy
 
-This repo follows a strict validation ladder:
-1. Math-level recurrence checks
-2. Selective operator parity checks
-3. Block-level forward checks
-4. Kernel-wrapper parity checks
-5. End-to-end behavior checks
+This repository follows a strict validation ladder:
 
-Performance claims are only meaningful after this correctness path is green.
+1. math-level recurrence checks
+2. selective operator parity checks
+3. block-level forward checks
+4. kernel-wrapper parity checks
+5. official-model parity checks
+6. end-to-end behavior checks
 
----
-
-## Colab / GPU execution
-
-If you want to finish the hardware-dependent validation on Google Colab, use:
-- `COLAB_RUNBOOK.md` for step-by-step setup
-- `scripts/run_gpu_validation.py` for one-shot execution
-
-That path will produce GPU JSON results and GPU figures under `benchmarks/results/` and `figures/`.
+Performance claims should only be made after the correctness path is green.
 
 ---
 
 ## Known limitations
 
-- This workspace is CPU-only, so the new Triton fused kernel path cannot be benchmarked here on real CUDA hardware.
-- Even though the fused Triton path now covers both rank-3 and rank-4 `B/C` layouts, it still needs real CUDA execution and benchmarking before making performance claims.
-- Official checkpoint layer-by-layer parity is provided as a best-effort script (`scripts/official_parity.py`) and depends on model internals.
-- Inference benchmark requires network/model availability.
+- This workspace is CPU-only, so true Triton CUDA execution cannot be benchmarked here.
+- The fused Triton path is implemented, but final performance claims still require GPU runs.
+- Official parity currently focuses on mixer-level validation rather than the full end-to-end pretrained model stack.
+- Some figures are still placeholders until GPU results are generated.
+- Inference benchmarks depend on model downloads and network availability.
 
 ---
 
-## Next upgrades
+## Next steps
 
-- Expand official parity from one mixer/layer to a multi-layer sweep.
-- Add CUDA-side parity + benchmark runs for the fused Triton kernels.
-- Replace remaining illustrative figures with measured GPU runs on T4/A100.
-- Add streaming API demo for side-by-side inference serving.
+- run the full GPU validation flow on Colab or another CUDA machine
+- replace illustrative figures with measured GPU figures
+- extend parity from sampled layers to broader model sweeps
+- tighten the final README results section with real T4 / A100 measurements
+- optionally add a lightweight serving demo
 
 ---
 
