@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Set up Python
+        run: uv python install 3.12
+      - name: Create env and install deps
+        run: |
+          uv venv .venv
+          source .venv/bin/activate
+          uv pip install --index-url https://download.pytorch.org/whl/cpu torch
+          uv pip install numpy pytest nbformat matplotlib
+          uv pip install -e . --no-deps
+      - name: Run tests
+        run: |
+          source .venv/bin/activate
+          pytest -q

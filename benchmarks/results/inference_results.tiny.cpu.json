@@ -1,0 +1,38 @@
+[
+  {
+    "model_name": "sshleifer/tiny-gpt2",
+    "device": "cpu",
+    "prompt_tokens": 5,
+    "new_tokens": 4,
+    "ttft_ms": 6.461120909079909,
+    "inter_token_ms": 3.023138386197388,
+    "peak_memory_mb": 352.87890625
+  },
+  {
+    "model_name": "sshleifer/tiny-gpt2",
+    "device": "cpu",
+    "prompt_tokens": 5,
+    "new_tokens": 4,
+    "ttft_ms": 4.492833046242595,
+    "inter_token_ms": 4.655158651682238,
+    "peak_memory_mb": 355.5546875
+  },
+  {
+    "model_name": "sshleifer/tiny-gpt2",
+    "device": "cpu",
+    "prompt_tokens": 13,
+    "new_tokens": 4,
+    "ttft_ms": 4.774656961672008,
+    "inter_token_ms": 1.8965003546327353,
+    "peak_memory_mb": 355.65234375
+  },
+  {
+    "model_name": "sshleifer/tiny-gpt2",
+    "device": "cpu",
+    "prompt_tokens": 13,
+    "new_tokens": 4,
+    "ttft_ms": 4.784379038028419,
+    "inter_token_ms": 5.568000293957691,
+    "peak_memory_mb": 355.73828125
+  }
+]

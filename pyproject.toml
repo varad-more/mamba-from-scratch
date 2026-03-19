@@ -1,0 +1,59 @@
+[build-system]
+requires = ["hatchling>=1.24.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mamba-from-scratch"
+version = "0.1.0"
+description = "Minimal Mamba implementation from math to kernels"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Varad More" }]
+dependencies = [
+  "numpy>=1.26",
+  "torch>=2.4",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "nbformat>=5.10",
+  "matplotlib>=3.8",
+]
+bench = [
+  "transformers>=4.46",
+  "accelerate>=0.33",
+  "psutil>=6.0",
+]
+kernel = [
+  "triton>=3.0; platform_system == 'Linux' and platform_machine == 'x86_64'",
+]
+all = [
+  "mamba-from-scratch[dev,bench,kernel]",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mamba_minimal"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "."]
+testpaths = ["tests"]
+markers = [
+  "gpu: requires CUDA and Triton",
+  "slow: downloads models or runs long benchmarks",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.coverage.run]
+source = ["src/mamba_minimal"]

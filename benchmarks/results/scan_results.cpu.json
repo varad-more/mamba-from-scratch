@@ -1,0 +1,44 @@
+[
+  {
+    "name": "reference",
+    "device": "cpu",
+    "batch": 1,
+    "channels": 8,
+    "state": 4,
+    "length": 64,
+    "dtype": "float32",
+    "latency_ms_p50": 3.8914079777896404,
+    "latency_ms_p95": 4.1906270198524,
+    "throughput_tokens_per_s": 16446.489385148627,
+    "estimated_bytes": 8352.0,
+    "achieved_bandwidth_gb_s": 0.0021462668647618957
+  },
+  {
+    "name": "naive",
+    "device": "cpu",
+    "batch": 1,
+    "channels": 8,
+    "state": 4,
+    "length": 64,
+    "dtype": "float32",
+    "latency_ms_p50": 4.056670935824513,
+    "latency_ms_p95": 4.281598026864231,
+    "throughput_tokens_per_s": 15776.482986286901,
+    "estimated_bytes": 8352.0,
+    "achieved_bandwidth_gb_s": 0.002058831029710441
+  },
+  {
+    "name": "fused",
+    "device": "cpu",
+    "batch": 1,
+    "channels": 8,
+    "state": 4,
+    "length": 64,
+    "dtype": "float32",
+    "latency_ms_p50": 3.841352998279035,
+    "latency_ms_p95": 4.3926750076934695,
+    "throughput_tokens_per_s": 16660.79634667073,
+    "estimated_bytes": 8352.0,
+    "achieved_bandwidth_gb_s": 0.0021742339232405303
+  }
+]
