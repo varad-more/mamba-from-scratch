@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 
@@ -63,16 +64,40 @@ def render_inference_results(path: Path, out_path: Path) -> None:
     fig.savefig(out_path, dpi=180)
 
 
-def main() -> None:
-    FIGURES.mkdir(parents=True, exist_ok=True)
-
+def render_default_results(figures_dir: Path) -> None:
     scan_path = RESULTS / "scan_results.cpu.json"
     if scan_path.exists():
-        render_scan_results(scan_path, FIGURES / "scan_benchmark_cpu.png")
+        render_scan_results(scan_path, figures_dir / "scan_benchmark_cpu.png")
 
     inference_path = RESULTS / "inference_results.cpu.json"
     if inference_path.exists():
-        render_inference_results(inference_path, FIGURES / "inference_comparison_cpu.png")
+        render_inference_results(inference_path, figures_dir / "inference_comparison_cpu.png")
+
+    gpu_scan = RESULTS / "scan_results.gpu.json"
+    if gpu_scan.exists():
+        render_scan_results(gpu_scan, figures_dir / "scan_benchmark_gpu.png")
+
+    gpu_inference = RESULTS / "inference_results.gpu.json"
+    if gpu_inference.exists():
+        render_inference_results(gpu_inference, figures_dir / "inference_comparison_gpu.png")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Render benchmark figures from saved JSON results.")
+    parser.add_argument("--scan-input", type=Path, default=None)
+    parser.add_argument("--scan-output", type=Path, default=None)
+    parser.add_argument("--inference-input", type=Path, default=None)
+    parser.add_argument("--inference-output", type=Path, default=None)
+    args = parser.parse_args()
+
+    FIGURES.mkdir(parents=True, exist_ok=True)
+
+    if args.scan_input and args.scan_output:
+        render_scan_results(args.scan_input, args.scan_output)
+    if args.inference_input and args.inference_output:
+        render_inference_results(args.inference_input, args.inference_output)
+    if not any([args.scan_input, args.scan_output, args.inference_input, args.inference_output]):
+        render_default_results(FIGURES)
 
     print("Rendered benchmark figures to", FIGURES)
 

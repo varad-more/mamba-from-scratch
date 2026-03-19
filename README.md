@@ -65,7 +65,9 @@ mamba-from-scratch/
 ├── scripts/
 │   ├── create_notebooks.py
 │   ├── make_placeholder_figures.py
-│   └── official_parity.py
+│   ├── official_parity.py
+│   ├── render_benchmark_figures.py
+│   └── run_gpu_validation.py
 ├── figures/
 └── tests/
 ```
@@ -143,6 +145,8 @@ pytest -q
 
 ```bash
 python benchmarks/benchmark_scan.py --device auto --batch 2 --channels 64 --state 16 --length 256
+# save directly to JSON
+python benchmarks/benchmark_scan.py --device auto --batch 2 --channels 64 --state 16 --length 256 --output benchmarks/results/scan_results.gpu.json
 ```
 
 Example output file in this repo:
@@ -158,6 +162,8 @@ python benchmarks/roofline.py --output figures/roofline.png
 
 ```bash
 python benchmarks/benchmark_inference.py --device auto --new-tokens 32
+# save directly to JSON
+python benchmarks/benchmark_inference.py --device auto --new-tokens 32 --output benchmarks/results/inference_results.gpu.json
 ```
 
 Example output files in this repo:
@@ -168,8 +174,8 @@ Example output files in this repo:
 
 ```bash
 python scripts/official_parity.py --model state-spaces/mamba-130m-hf --layer 0 --seq-len 8 --batch 1 --device auto --json
-# or sweep multiple layers
-python scripts/official_parity.py --model state-spaces/mamba-130m-hf --layer 0,5,23 --seq-len 4 --batch 1 --device auto --json
+# or sweep multiple layers + save to disk
+python scripts/official_parity.py --model state-spaces/mamba-130m-hf --layer 0,5,23 --seq-len 4 --batch 1 --device auto --json --output benchmarks/results/official_parity.gpu.json
 ```
 
 This verifies that the local `MambaBlock` can load an official mixer state dict and reproduce its output.
@@ -212,11 +218,19 @@ Generated figure assets are in `figures/`:
 - `architecture.png`
 - `scan_benchmark_cpu.png`
 - `inference_comparison_cpu.png`
+- `scan_benchmark_gpu.png` (generated after GPU validation)
+- `inference_comparison_gpu.png` (generated after GPU validation)
 
 Render result-driven figures from saved benchmark JSON:
 
 ```bash
 python scripts/render_benchmark_figures.py
+```
+
+Run the bundled GPU validation flow (great for Colab):
+
+```bash
+python scripts/run_gpu_validation.py --device auto --parity-layers 0,5,23
 ```
 
 > `scan_benchmark_cpu.png` and `inference_comparison_cpu.png` are generated from actual saved result files in `benchmarks/results/`. `memory_scaling.png` and `throughput_comparison.png` remain illustrative placeholders until replaced with full target-hardware production runs.
@@ -249,6 +263,16 @@ This repo follows a strict validation ladder:
 5. End-to-end behavior checks
 
 Performance claims are only meaningful after this correctness path is green.
+
+---
+
+## Colab / GPU execution
+
+If you want to finish the hardware-dependent validation on Google Colab, use:
+- `COLAB_RUNBOOK.md` for step-by-step setup
+- `scripts/run_gpu_validation.py` for one-shot execution
+
+That path will produce GPU JSON results and GPU figures under `benchmarks/results/` and `figures/`.
 
 ---
 

@@ -45,8 +45,8 @@ class InferenceResult:
     peak_memory_mb: float
 
 
-def current_memory_mb() -> float:
-    if torch.cuda.is_available():
+def current_memory_mb(device: str) -> float:
+    if device.startswith("cuda"):
         return torch.cuda.max_memory_allocated() / 1024**2
     if psutil is None:
         return 0.0
@@ -85,7 +85,7 @@ def measure_model(model_name: str, prompt: str, new_tokens: int, device: str) ->
         torch.cuda.synchronize()
     full_ms = (time.perf_counter() - start) * 1000.0
     inter_token_ms = max(0.0, (full_ms - ttft_ms) / max(1, new_tokens - 1))
-    peak_memory_mb = current_memory_mb()
+    peak_memory_mb = current_memory_mb(device)
 
     return InferenceResult(
         model_name=model_name,
@@ -98,24 +98,38 @@ def measure_model(model_name: str, prompt: str, new_tokens: int, device: str) ->
     )
 
 
+def run_inference_benchmarks(mamba_model: str, baseline_model: str, new_tokens: int, device: str) -> list[InferenceResult]:
+    results = []
+    for prompt in PROMPTS:
+        results.append(measure_model(mamba_model, prompt, new_tokens, device))
+        results.append(measure_model(baseline_model, prompt, new_tokens, device))
+    return results
+
+
+def save_results(path: Path, results: list[InferenceResult]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps([asdict(result) for result in results], indent=2))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Benchmark Mamba vs GPT-2 inference behavior.")
     parser.add_argument("--mamba-model", default="state-spaces/mamba-130m-hf")
     parser.add_argument("--baseline-model", default="gpt2")
     parser.add_argument("--new-tokens", type=int, default=32)
     parser.add_argument("--device", default="auto")
+    parser.add_argument("--output", type=Path, default=None, help="Optional JSON output path")
     args = parser.parse_args()
 
     device = args.device
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    results = []
-    for prompt in PROMPTS:
-        results.append(asdict(measure_model(args.mamba_model, prompt, args.new_tokens, device)))
-        results.append(asdict(measure_model(args.baseline_model, prompt, args.new_tokens, device)))
+    results = run_inference_benchmarks(args.mamba_model, args.baseline_model, args.new_tokens, device)
+    payload = [asdict(result) for result in results]
 
-    print(json.dumps(results, indent=2))
+    if args.output is not None:
+        save_results(args.output, results)
+    print(json.dumps(payload, indent=2))
 
 
 if __name__ == "__main__":

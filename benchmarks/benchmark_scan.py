@@ -103,6 +103,67 @@ def benchmark(
     )
 
 
+def run_scan_benchmarks(
+    batch: int,
+    channels: int,
+    state: int,
+    length: int,
+    device: str,
+    dtype: torch.dtype,
+    warmup: int,
+    repeats: int,
+) -> list[BenchmarkResult]:
+    u, delta, A, B, C, D, z = make_inputs(batch, channels, state, length, device, dtype)
+    touched = estimate_bytes(u, delta, A, B, C, D, z)
+
+    return [
+        benchmark(
+            "reference",
+            lambda: selective_scan_ref(u, delta, A, B, C, D=D, z=z),
+            length,
+            batch,
+            touched,
+            device,
+            channels,
+            state,
+            dtype,
+            warmup,
+            repeats,
+        ),
+        benchmark(
+            "naive",
+            lambda: selective_scan_naive(u, delta, A, B, C, D=D, z=z),
+            length,
+            batch,
+            touched,
+            device,
+            channels,
+            state,
+            dtype,
+            warmup,
+            repeats,
+        ),
+        benchmark(
+            "fused",
+            lambda: selective_scan_fused(u, delta, A, B, C, D=D, z=z),
+            length,
+            batch,
+            touched,
+            device,
+            channels,
+            state,
+            dtype,
+            warmup,
+            repeats,
+        ),
+    ]
+
+
+def save_results(path: Path, results: list[BenchmarkResult]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps([asdict(result) for result in results], indent=2))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Benchmark selective scan backends.")
     parser.add_argument("--batch", type=int, default=2)
@@ -113,6 +174,7 @@ def main() -> None:
     parser.add_argument("--dtype", type=str, default="float32")
     parser.add_argument("--warmup", type=int, default=5)
     parser.add_argument("--repeats", type=int, default=20)
+    parser.add_argument("--output", type=Path, default=None, help="Optional JSON output path")
     args = parser.parse_args()
 
     dtype = getattr(torch, args.dtype)
@@ -120,54 +182,21 @@ def main() -> None:
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    u, delta, A, B, C, D, z = make_inputs(
-        args.batch, args.channels, args.state, args.length, device, dtype
+    results = run_scan_benchmarks(
+        batch=args.batch,
+        channels=args.channels,
+        state=args.state,
+        length=args.length,
+        device=device,
+        dtype=dtype,
+        warmup=args.warmup,
+        repeats=args.repeats,
     )
-    touched = estimate_bytes(u, delta, A, B, C, D, z)
+    payload = [asdict(result) for result in results]
 
-    results = [
-        benchmark(
-            "reference",
-            lambda: selective_scan_ref(u, delta, A, B, C, D=D, z=z),
-            args.length,
-            args.batch,
-            touched,
-            device,
-            args.channels,
-            args.state,
-            dtype,
-            args.warmup,
-            args.repeats,
-        ),
-        benchmark(
-            "naive",
-            lambda: selective_scan_naive(u, delta, A, B, C, D=D, z=z),
-            args.length,
-            args.batch,
-            touched,
-            device,
-            args.channels,
-            args.state,
-            dtype,
-            args.warmup,
-            args.repeats,
-        ),
-        benchmark(
-            "fused",
-            lambda: selective_scan_fused(u, delta, A, B, C, D=D, z=z),
-            args.length,
-            args.batch,
-            touched,
-            device,
-            args.channels,
-            args.state,
-            dtype,
-            args.warmup,
-            args.repeats,
-        ),
-    ]
-
-    print(json.dumps([asdict(result) for result in results], indent=2))
+    if args.output is not None:
+        save_results(args.output, results)
+    print(json.dumps(payload, indent=2))
 
 
 if __name__ == "__main__":

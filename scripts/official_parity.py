@@ -136,6 +136,7 @@ def main() -> None:
     parser.add_argument("--device", default="auto")
     parser.add_argument("--seed", type=int, default=123)
     parser.add_argument("--json", action="store_true", help="Emit JSON instead of repr dict")
+    parser.add_argument("--output", type=Path, default=None, help="Optional JSON output path")
     args = parser.parse_args()
 
     try:
@@ -170,6 +171,10 @@ def main() -> None:
             "mean_abs_error": sum(row["mean_abs_error"] for row in results) / len(results),
             "results": results,
         }
+
+    if args.output is not None:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(payload, indent=2))
 
     if args.json:
         print(json.dumps(payload, indent=2))
