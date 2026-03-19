@@ -1,0 +1,38 @@
+[
+  {
+    "model_name": "state-spaces/mamba-130m-hf",
+    "device": "cpu",
+    "prompt_tokens": 5,
+    "new_tokens": 4,
+    "ttft_ms": 336.9482000125572,
+    "inter_token_ms": 76.90589164849371,
+    "peak_memory_mb": 922.8125
+  },
+  {
+    "model_name": "gpt2",
+    "device": "cpu",
+    "prompt_tokens": 5,
+    "new_tokens": 4,
+    "ttft_ms": 102.83211106434464,
+    "inter_token_ms": 50.90696298672507,
+    "peak_memory_mb": 1450.671875
+  },
+  {
+    "model_name": "state-spaces/mamba-130m-hf",
+    "device": "cpu",
+    "prompt_tokens": 13,
+    "new_tokens": 4,
+    "ttft_ms": 282.15059102512896,
+    "inter_token_ms": 70.20330429077148,
+    "peak_memory_mb": 1457.47265625
+  },
+  {
+    "model_name": "gpt2",
+    "device": "cpu",
+    "prompt_tokens": 13,
+    "new_tokens": 4,
+    "ttft_ms": 109.38563803210855,
+    "inter_token_ms": 54.13645699930688,
+    "peak_memory_mb": 1965.15625
+  }
+]

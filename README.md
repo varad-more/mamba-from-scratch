@@ -25,9 +25,10 @@ This repo is built to answer two questions:
 - ✅ Core reference modules implemented
 - ✅ Unit + parity + end-to-end tests implemented
 - ✅ Triton fused forward path added for both shared and channel-specific `B/C` layouts
-- ✅ `pytest`: **15 passed, 1 skipped** (GPU-only parity test skipped on CPU)
+- ✅ Official HF parity path working for `state-spaces/mamba-130m-hf` mixer extraction
+- ✅ `pytest`: **15 passed, 2 skipped** by default (`1` GPU-only, `1` official-parity slow test)
 - ✅ Notebooks generated for each major milestone
-- ✅ Benchmark scripts working (scan + inference harness)
+- ✅ Benchmark scripts + result-driven figure rendering working
 
 ---
 
@@ -159,8 +160,23 @@ python benchmarks/roofline.py --output figures/roofline.png
 python benchmarks/benchmark_inference.py --device auto --new-tokens 32
 ```
 
-Example output file in this repo:
+Example output files in this repo:
+- `benchmarks/results/inference_results.cpu.json` (CPU comparison: `mamba-130m-hf` vs `gpt2`)
 - `benchmarks/results/inference_results.tiny.cpu.json` (tiny model smoke benchmark)
+
+### Official parity check against HuggingFace Mamba
+
+```bash
+python scripts/official_parity.py --model state-spaces/mamba-130m-hf --layer 0 --seq-len 8 --batch 1 --device auto --json
+# or sweep multiple layers
+python scripts/official_parity.py --model state-spaces/mamba-130m-hf --layer 0,5,23 --seq-len 4 --batch 1 --device auto --json
+```
+
+This verifies that the local `MambaBlock` can load an official mixer state dict and reproduce its output.
+
+Sample saved results:
+- `benchmarks/results/official_parity.layer0.cpu.json` → current sample run reports `max_abs_error = 0.0`
+- `benchmarks/results/official_parity.sample_layers.cpu.json` → sample multi-layer sweep (`0,5,23`) also reports `max_abs_error = 0.0`
 
 ### Text generation smoke test
 
@@ -194,8 +210,16 @@ Generated figure assets are in `figures/`:
 - `memory_scaling.png`
 - `throughput_comparison.png`
 - `architecture.png`
+- `scan_benchmark_cpu.png`
+- `inference_comparison_cpu.png`
 
-> `roofline.png` is generated from benchmark assumptions. `memory_scaling.png` and `throughput_comparison.png` are illustrative placeholders until replaced with measured production runs from your target hardware.
+Render result-driven figures from saved benchmark JSON:
+
+```bash
+python scripts/render_benchmark_figures.py
+```
+
+> `scan_benchmark_cpu.png` and `inference_comparison_cpu.png` are generated from actual saved result files in `benchmarks/results/`. `memory_scaling.png` and `throughput_comparison.png` remain illustrative placeholders until replaced with full target-hardware production runs.
 
 ---
 
@@ -239,9 +263,9 @@ Performance claims are only meaningful after this correctness path is green.
 
 ## Next upgrades
 
-- Add robust official checkpoint parity for a full block/layer stack.
+- Expand official parity from one mixer/layer to a multi-layer sweep.
 - Add CUDA-side parity + benchmark runs for the fused Triton kernels.
-- Replace illustrative figures with measured GPU runs on T4/A100.
+- Replace remaining illustrative figures with measured GPU runs on T4/A100.
 - Add streaming API demo for side-by-side inference serving.
 
 ---
