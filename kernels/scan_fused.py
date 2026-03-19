@@ -26,6 +26,13 @@ class KernelMetadata:
     notes: str
 
 
+@dataclass(frozen=True, slots=True)
+class KernelSupportInfo:
+    supported: bool
+    layout: str
+    reason: str
+
+
 def _next_power_of_two(value: int) -> int:
     if value <= 1:
         return 1
@@ -61,9 +68,11 @@ if TRITON_AVAILABLE:
         stride_a_d,
         stride_a_n,
         stride_b_b,
+        stride_b_d,
         stride_b_n,
         stride_b_l,
         stride_c_b,
+        stride_c_d,
         stride_c_n,
         stride_c_l,
         stride_state_b,
@@ -123,12 +132,20 @@ if TRITON_AVAILABLE:
             delta_t = _softplus(delta_t)
 
             b_t = tl.load(
-                b_ptr + batch_idx * stride_b_b + offs_n * stride_b_n + token_idx * stride_b_l,
+                b_ptr
+                + batch_idx * stride_b_b
+                + channel_idx * stride_b_d
+                + offs_n * stride_b_n
+                + token_idx * stride_b_l,
                 mask=mask_n & active,
                 other=0.0,
             ).to(tl.float32)
             c_t = tl.load(
-                c_ptr + batch_idx * stride_c_b + offs_n * stride_c_n + token_idx * stride_c_l,
+                c_ptr
+                + batch_idx * stride_c_b
+                + channel_idx * stride_c_d
+                + offs_n * stride_c_n
+                + token_idx * stride_c_l,
                 mask=mask_n & active,
                 other=0.0,
             ).to(tl.float32)
@@ -163,6 +180,70 @@ if TRITON_AVAILABLE:
         )
 
 
+def fused_triton_shape_support(
+    u: Tensor,
+    delta: Tensor,
+    A: Tensor,
+    B: Tensor,
+    C: Tensor,
+    D: Optional[Tensor] = None,
+    z: Optional[Tensor] = None,
+) -> KernelSupportInfo:
+    """Return whether inputs fit the current fused Triton kernel boundary.
+
+    This check is intentionally device-agnostic. It validates tensor layout,
+    ranks, dtypes, and shape compatibility so it can be unit-tested even on
+    CPU-only machines.
+    """
+
+    if u.ndim != 3 or delta.shape != u.shape:
+        return KernelSupportInfo(False, "invalid", "u and delta must have shape (B, D, L).")
+    if A.ndim != 2:
+        return KernelSupportInfo(False, "invalid", "A must have shape (D, N).")
+
+    batch, channels, length = u.shape
+    state = A.shape[1]
+    if A.shape[0] != channels:
+        return KernelSupportInfo(False, "invalid", "A.shape[0] must match channel dimension D.")
+
+    if B.ndim != C.ndim:
+        return KernelSupportInfo(False, "invalid", "B and C must have the same rank.")
+
+    if B.ndim == 3:
+        if B.shape != (batch, state, length) or C.shape != (batch, state, length):
+            return KernelSupportInfo(
+                False,
+                "shared-bc",
+                "Rank-3 B and C must have shape (B, N, L).",
+            )
+        layout = "shared-bc"
+    elif B.ndim == 4:
+        if B.shape != (batch, channels, state, length) or C.shape != (batch, channels, state, length):
+            return KernelSupportInfo(
+                False,
+                "channel-bc",
+                "Rank-4 B and C must have shape (B, D, N, L).",
+            )
+        layout = "channel-bc"
+    else:
+        return KernelSupportInfo(
+            False,
+            "invalid",
+            "Current fused Triton path supports only rank-3 or rank-4 B/C tensors.",
+        )
+
+    if D is not None and D.shape != (channels,):
+        return KernelSupportInfo(False, layout, "D must have shape (D,).")
+    if z is not None and z.shape != u.shape:
+        return KernelSupportInfo(False, layout, "z must match u shape (B, D, L).")
+    if state > 128:
+        return KernelSupportInfo(False, layout, "Current Triton kernel supports state size up to 128.")
+    if u.dtype not in (torch.float16, torch.float32, torch.bfloat16):
+        return KernelSupportInfo(False, layout, f"Unsupported dtype for Triton path: {u.dtype}.")
+
+    return KernelSupportInfo(True, layout, f"Supported fused Triton layout: {layout}.")
+
+
 def _supported_triton_path(
     u: Tensor,
     delta: Tensor,
@@ -171,34 +252,17 @@ def _supported_triton_path(
     C: Tensor,
     D: Optional[Tensor],
     z: Optional[Tensor],
-) -> tuple[bool, str]:
+) -> tuple[bool, str, str]:
+    shape_support = fused_triton_shape_support(u, delta, A, B, C, D=D, z=z)
+    if not shape_support.supported:
+        return False, shape_support.reason, shape_support.layout
     if not TRITON_AVAILABLE:
-        return False, "Triton is not installed."
+        return False, "Triton is not installed.", shape_support.layout
     if not u.is_cuda:
-        return False, "CUDA tensor required for Triton execution."
+        return False, "CUDA tensor required for Triton execution.", shape_support.layout
     if delta.device != u.device or A.device != u.device or B.device != u.device or C.device != u.device:
-        return False, "All tensors must live on the same CUDA device."
-    if u.ndim != 3 or delta.shape != u.shape:
-        return False, "u and delta must have shape (B, D, L)."
-    if A.ndim != 2:
-        return False, "A must have shape (D, N)."
-    if B.ndim != 3 or C.ndim != 3:
-        return False, "Current Triton path supports rank-3 B/C tensors with shape (B, N, L)."
-    batch, channels, length = u.shape
-    state = A.shape[1]
-    if A.shape[0] != channels:
-        return False, "A.shape[0] must match channel dimension D."
-    if B.shape != (batch, state, length) or C.shape != (batch, state, length):
-        return False, "B and C must have shape (B, N, L) for the fused Triton path."
-    if D is not None and D.shape != (channels,):
-        return False, "D must have shape (D,)."
-    if z is not None and z.shape != u.shape:
-        return False, "z must match u shape."
-    if state > 128:
-        return False, "Current Triton kernel supports state size up to 128."
-    if u.dtype not in (torch.float16, torch.float32, torch.bfloat16):
-        return False, f"Unsupported dtype for Triton path: {u.dtype}."
-    return True, "supported"
+        return False, "All tensors must live on the same CUDA device.", shape_support.layout
+    return True, shape_support.reason, shape_support.layout
 
 
 def _launch_triton_fused(
@@ -210,6 +274,7 @@ def _launch_triton_fused(
     D: Optional[Tensor],
     z: Optional[Tensor],
     chunk_size: int,
+    layout: str,
 ) -> Tensor:
     batch, channels, length = u.shape
     state_size = A.shape[1]
@@ -231,34 +296,49 @@ def _launch_triton_fused(
         block_l = _next_power_of_two(this_length)
         block_n = _next_power_of_two(state_size)
 
+        u_chunk = u[:, :, start:end]
+        delta_chunk = delta[:, :, start:end]
+        B_chunk = B[..., start:end]
+        C_chunk = C[..., start:end]
+        z_chunk = z_tensor[:, :, start:end] if z is not None else z_tensor
+
         y_chunk = torch.empty(batch, channels, this_length, device=u.device, dtype=u.dtype)
         next_state = torch.empty_like(state)
 
+        stride_b_d = B_chunk.stride(1) if layout == "channel-bc" else 0
+        stride_c_d = C_chunk.stride(1) if layout == "channel-bc" else 0
+        stride_b_n = B_chunk.stride(2) if layout == "channel-bc" else B_chunk.stride(1)
+        stride_c_n = C_chunk.stride(2) if layout == "channel-bc" else C_chunk.stride(1)
+        stride_b_l = B_chunk.stride(3) if layout == "channel-bc" else B_chunk.stride(2)
+        stride_c_l = C_chunk.stride(3) if layout == "channel-bc" else C_chunk.stride(2)
+
         _selective_scan_chunk_kernel[(batch * channels,)](
-            u[:, :, start:end],
-            delta[:, :, start:end],
+            u_chunk,
+            delta_chunk,
             A,
-            B[:, :, start:end],
-            C[:, :, start:end],
+            B_chunk,
+            C_chunk,
             D_tensor,
-            z_tensor[:, :, start:end] if z is not None else z_tensor,
+            z_chunk,
             state,
             next_state,
             y_chunk,
-            u.stride(0),
-            u.stride(1),
-            u.stride(2),
-            delta.stride(0),
-            delta.stride(1),
-            delta.stride(2),
+            u_chunk.stride(0),
+            u_chunk.stride(1),
+            u_chunk.stride(2),
+            delta_chunk.stride(0),
+            delta_chunk.stride(1),
+            delta_chunk.stride(2),
             A.stride(0),
             A.stride(1),
-            B.stride(0),
-            B.stride(1),
-            B.stride(2),
-            C.stride(0),
-            C.stride(1),
-            C.stride(2),
+            B_chunk.stride(0),
+            stride_b_d,
+            stride_b_n,
+            stride_b_l,
+            C_chunk.stride(0),
+            stride_c_d,
+            stride_c_n,
+            stride_c_l,
             state.stride(0),
             state.stride(1),
             state.stride(2),
@@ -292,25 +372,27 @@ def selective_scan_fused(
 ) -> Tensor | tuple[Tensor, KernelMetadata]:
     """Selective scan entry point with Triton fused-kernel support.
 
-    Supported Triton path:
+    Supported Triton layouts:
+    - shared B/C: ``B`` and ``C`` shape ``(B, N, L)``
+    - channel-specific B/C: ``B`` and ``C`` shape ``(B, D, N, L)``
+
+    Common requirements:
     - ``u`` and ``delta`` shape ``(B, D, L)``
     - ``A`` shape ``(D, N)``
-    - ``B`` and ``C`` shape ``(B, N, L)``
     - optional ``D`` skip tensor with shape ``(D,)``
     - optional gate ``z`` with shape ``(B, D, L)``
 
     Unsupported shapes or CPU-only environments fall back to the trusted
-    PyTorch reference path. This keeps the interface stable while enabling a
-    progressively faster CUDA implementation.
+    PyTorch reference path.
     """
 
-    supported, note = _supported_triton_path(u, delta, A, B, C, D, z)
+    supported, note, layout = _supported_triton_path(u, delta, A, B, C, D, z)
     if supported:
-        output = _launch_triton_fused(u, delta, A, B, C, D, z, chunk_size=chunk_size)
+        output = _launch_triton_fused(u, delta, A, B, C, D, z, chunk_size=chunk_size, layout=layout)
         metadata = KernelMetadata(
             backend="triton-fused",
             used_fallback=False,
-            notes="Executed fused Triton chunk kernel.",
+            notes=f"Executed fused Triton chunk kernel ({layout}).",
         )
     else:
         output = selective_scan_ref(u=u, delta=delta, A=A, B=B, C=C, D=D, z=z)
