@@ -24,7 +24,8 @@ This repo is built to answer two questions:
 
 - ✅ Core reference modules implemented
 - ✅ Unit + parity + end-to-end tests implemented
-- ✅ `pytest`: **12 passed, 1 skipped** (GPU-only parity test skipped on CPU)
+- ✅ Triton fused forward path added for the supported `(B,D,L) + (D,N) + (B,N,L)` case
+- ✅ `pytest`: **14 passed, 1 skipped** (GPU-only parity test skipped on CPU)
 - ✅ Notebooks generated for each major milestone
 - ✅ Benchmark scripts working (scan + inference harness)
 
@@ -198,6 +199,21 @@ Generated figure assets are in `figures/`:
 
 ---
 
+## Triton fused path: current support boundary
+
+The current fused Triton kernel supports this shape family:
+- `u`, `delta`: `(B, D, L)`
+- `A`: `(D, N)`
+- `B`, `C`: `(B, N, L)`
+- optional `D_skip`: `(D,)`
+- optional gate `z`: `(B, D, L)`
+
+If inputs fall outside this boundary, the code automatically falls back to the PyTorch reference implementation.
+
+This means the kernel path is now **real but intentionally narrow**: correctness first, broader coverage second.
+
+---
+
 ## Validation strategy
 
 This repo follows a strict validation ladder:
@@ -213,7 +229,8 @@ Performance claims are only meaningful after this correctness path is green.
 
 ## Known limitations
 
-- Full custom Triton fused math kernel is scaffolded but not executed in CPU-only environments.
+- This workspace is CPU-only, so the new Triton fused kernel path cannot be benchmarked here on real CUDA hardware.
+- The current Triton implementation supports the simpler rank-3 `B/C` path first; wider shape coverage still falls back to reference code.
 - Official checkpoint layer-by-layer parity is provided as a best-effort script (`scripts/official_parity.py`) and depends on model internals.
 - Inference benchmark requires network/model availability.
 
@@ -221,7 +238,7 @@ Performance claims are only meaningful after this correctness path is green.
 
 ## Next upgrades
 
-- Replace kernel wrappers with true Triton fused compute path.
+- Extend Triton coverage to channel-specific rank-4 `B/C` tensors.
 - Add robust official checkpoint parity for a full block/layer stack.
 - Replace illustrative figures with measured GPU runs on T4/A100.
 - Add streaming API demo for side-by-side inference serving.
