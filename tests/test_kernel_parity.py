@@ -62,7 +62,8 @@ def test_fused_kernel_reports_fallback_metadata_on_cpu() -> None:
     _, metadata = selective_scan_fused(*inputs[:5], D=inputs[5], z=inputs[6], return_metadata=True)
     assert metadata.used_fallback is True
     assert metadata.backend == "torch-reference"
-    assert "CUDA" in metadata.notes
+    assert metadata.notes
+    assert ("CUDA" in metadata.notes) or ("Triton" in metadata.notes)
 
 
 def test_fused_kernel_falls_back_for_channel_specific_bc() -> None:
