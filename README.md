@@ -394,6 +394,61 @@ Performance claims should only be made after the correctness path is green.
 
 ---
 
+## Architecture Overview
+
+If you want the short version of how this repo is structured, use this mental model:
+
+```text
+Hugging Face checkpoint/config
+        ↓
+utils/hf_loader.py
+        ↓
+mixer_seq_simple.py
+(model assembly / LM wrapper)
+        ↓
+modules/mamba_simple.py
+(core Mamba block / mixer logic)
+        ↓
+ops/selective_scan_interface.py
+(low-level selective scan execution path)
+        ↓
+validation / benchmark scripts
+```
+
+For the deeper architecture map and refactor plan, see [`ARCHITECTURE.md`](ARCHITECTURE.md).
+
+### Module map
+
+| Area | File(s) | Responsibility |
+|---|---|---|
+| Top-level model assembly | `src/mamba_from_scratch/mixer_seq_simple.py` | Builds the full language model stack and connects backbone + LM head |
+| Core Mamba block | `src/mamba_from_scratch/modules/mamba_simple.py` | Main Mamba mixing/block behavior |
+| Selective scan / ops | `src/mamba_from_scratch/ops/selective_scan_interface.py` | Backend-facing selective scan execution path |
+| Hugging Face interop | `src/mamba_from_scratch/utils/hf_loader.py` | Loads/translates HF configs and weights into the local model |
+| Validation entrypoint | `scripts/run_gpu_validation.py` | GPU validation, parity checks, and benchmark-oriented execution |
+| Tests | `tests/` | Smoke, parity, and behavior checks |
+
+### How to read the codebase
+
+| Reading order | Why |
+|---|---|
+| `README.md` | Understand project goals and usage |
+| `ARCHITECTURE.md` | Get the current layer boundaries and refactor direction |
+| `mixer_seq_simple.py` | See how the model is assembled end-to-end |
+| `modules/mamba_simple.py` | Understand the core Mamba block behavior |
+| `ops/selective_scan_interface.py` | Understand how the low-level scan path is executed |
+| `utils/hf_loader.py` | See how checkpoints/configs are loaded from HF |
+| `scripts/run_gpu_validation.py` | See how correctness/perf validation is actually run |
+
+### Current architecture priorities
+
+The next best cleanup steps for this repo are:
+
+1. make backend/runtime selection more explicit,
+2. split Hugging Face loader responsibilities,
+3. keep validation/reporting layered on top of the model implementation rather than mixed into it.
+
+
 ## License
 
 MIT
