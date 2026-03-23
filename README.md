@@ -287,6 +287,8 @@ The remaining hardware-dependent part of the project is already wired up.
 
 If you want to run the real CUDA validation flow on Google Colab, use:
 - `COLAB_RUNBOOK.md` for setup instructions
+- `notebooks/08_colab_gpu_validation.ipynb` for a Colab-style notebook flow
+- `scripts/colab_gpu_validation.py` for a plain Python bootstrap you can run directly in Colab after cloning
 - `scripts/run_gpu_validation.py` for one-shot execution
 
 ### One-command Colab / GPU validation
