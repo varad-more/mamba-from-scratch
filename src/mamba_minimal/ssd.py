@@ -27,14 +27,19 @@ def causal_decay_matrix(a_chunk: Tensor) -> Tensor:
         raise ValueError(f"a_chunk must have shape (B, L, F), got {tuple(a_chunk.shape)}")
 
     batch, length, features = a_chunk.shape
-    weights = torch.zeros(batch, features, length, length, dtype=a_chunk.dtype, device=a_chunk.device)
+    # cumsum of log(a) lets us compute products as differences: prod_{k=j+1..i} a_k
+    log_a = torch.log(a_chunk + 1e-38)  # (B, L, F)
+    cum_log_a = torch.cumsum(log_a, dim=1)  # (B, L, F) -> cumsum along L
 
-    for i in range(length):
-        weights[:, :, i, i] = 1.0
-        running = torch.ones(batch, features, dtype=a_chunk.dtype, device=a_chunk.device)
-        for j in range(i - 1, -1, -1):
-            running = running * a_chunk[:, j + 1, :]
-            weights[:, :, i, j] = running
+    # weights[i, j] = exp(cum_log_a[i] - cum_log_a[j]) for j <= i, 0 otherwise
+    # Reshape for broadcasting: (B, F, L, 1) - (B, F, 1, L) -> (B, F, L, L)
+    cum = cum_log_a.permute(0, 2, 1)  # (B, F, L)
+    diff = cum.unsqueeze(-1) - cum.unsqueeze(-2)  # (B, F, L, L) = row - col
+    weights = torch.exp(diff)
+
+    # Zero out upper-triangular part (j > i)
+    mask = torch.tril(torch.ones(length, length, dtype=torch.bool, device=a_chunk.device))
+    weights = weights * mask.unsqueeze(0).unsqueeze(0)
     return weights
 
 

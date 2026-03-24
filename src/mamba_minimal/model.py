@@ -11,6 +11,13 @@ from torch import Tensor, nn
 from .discretization import inverse_softplus
 from .selective_scan import selective_scan_ref
 
+try:
+    from kernels.scan_fused import selective_scan_fused
+
+    _FUSED_AVAILABLE = True
+except Exception:
+    _FUSED_AVAILABLE = False
+
 
 @dataclass(slots=True)
 class MambaBlockConfig:
@@ -48,6 +55,7 @@ class MambaBlock(nn.Module):
         dt_rank: int | str = "auto",
         bias: bool = False,
         conv_bias: bool = True,
+        use_fused_kernel: bool = False,
     ) -> None:
         super().__init__()
         self.config = MambaBlockConfig(
@@ -64,6 +72,7 @@ class MambaBlock(nn.Module):
         self.d_conv = d_conv
         self.d_inner = self.config.d_inner
         self.dt_rank = self.config.resolved_dt_rank()
+        self.use_fused_kernel = use_fused_kernel and _FUSED_AVAILABLE
 
         self.in_proj = nn.Linear(d_model, self.d_inner * 2, bias=bias)
         self.conv1d = nn.Conv1d(
@@ -129,7 +138,10 @@ class MambaBlock(nn.Module):
         dt = self.dt_proj(dt)
 
         A = -torch.exp(self.A_log.float())
-        y = selective_scan_ref(
+        scan_fn = selective_scan_ref
+        if self.use_fused_kernel:
+            scan_fn = selective_scan_fused
+        y = scan_fn(
             u=x.transpose(1, 2),
             delta=dt.transpose(1, 2),
             A=A,
@@ -137,9 +149,6 @@ class MambaBlock(nn.Module):
             C=C.transpose(1, 2),
             D=self.D.float(),
             z=z.transpose(1, 2),
-            delta_bias=None,
-            delta_softplus=True,
-            return_last_state=False,
         )
         y = y.transpose(1, 2)
         return self.out_proj(y)

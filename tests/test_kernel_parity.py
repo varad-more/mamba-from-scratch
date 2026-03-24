@@ -81,6 +81,59 @@ def test_fused_kernel_falls_back_for_channel_specific_bc() -> None:
     assert metadata.backend == "torch-reference"
 
 
+def test_shape_support_rejects_mismatched_bc_ranks() -> None:
+    batch, channels, state, length = 2, 4, 3, 8
+    u = torch.randn(batch, channels, length)
+    delta = torch.rand(batch, channels, length)
+    A = -torch.rand(channels, state)
+    B_3d = torch.randn(batch, state, length)
+    C_4d = torch.randn(batch, channels, state, length)
+
+    result = fused_triton_shape_support(u, delta, A, B_3d, C_4d)
+    assert result.supported is False
+
+
+def test_shape_support_rejects_large_state_size() -> None:
+    batch, channels, length = 1, 2, 4
+    state = 256  # exceeds 128 limit
+    u = torch.randn(batch, channels, length)
+    delta = torch.rand(batch, channels, length)
+    A = -torch.rand(channels, state)
+    B = torch.randn(batch, state, length)
+    C = torch.randn(batch, state, length)
+
+    result = fused_triton_shape_support(u, delta, A, B, C)
+    assert result.supported is False
+    assert "128" in result.reason
+
+
+def test_shape_support_rejects_wrong_d_shape() -> None:
+    batch, channels, state, length = 2, 4, 3, 8
+    u = torch.randn(batch, channels, length)
+    delta = torch.rand(batch, channels, length)
+    A = -torch.rand(channels, state)
+    B = torch.randn(batch, state, length)
+    C = torch.randn(batch, state, length)
+    D_wrong = torch.randn(channels + 1)
+
+    result = fused_triton_shape_support(u, delta, A, B, C, D=D_wrong)
+    assert result.supported is False
+
+
+def test_fused_scan_matches_ref_without_d_or_z() -> None:
+    torch.manual_seed(42)
+    batch, channels, state, length = 2, 4, 3, 8
+    u = torch.randn(batch, channels, length)
+    delta = torch.rand(batch, channels, length)
+    A = -torch.rand(channels, state)
+    B = torch.randn(batch, state, length)
+    C = torch.randn(batch, state, length)
+
+    ref = selective_scan_ref(u, delta, A, B, C)
+    fused = selective_scan_fused(u, delta, A, B, C)
+    assert torch.allclose(ref, fused)
+
+
 @pytest.mark.gpu
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required for GPU parity checks")
 def test_kernel_wrappers_match_on_cuda() -> None:

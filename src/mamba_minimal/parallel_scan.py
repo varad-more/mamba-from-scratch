@@ -110,14 +110,18 @@ def chunked_affine_scan(
     chunk_starts = sequential_affine_scan(carry_a_tensor, carry_b_tensor, h0=h0)
 
     outputs: list[Tensor] = []
-    previous = torch.zeros(*leading, features, dtype=a.dtype, device=a.device) if h0 is None else h0
     for chunk_idx, local in enumerate(chunk_outputs):
-        if chunk_idx > 0:
-            previous = chunk_starts[..., chunk_idx - 1, :]
-        outputs.append(local + previous.unsqueeze(-2) * 0)
-        outputs[-1] = sequential_affine_scan(
-            a[..., chunk_idx * chunk_size : min(length, (chunk_idx + 1) * chunk_size), :],
-            b[..., chunk_idx * chunk_size : min(length, (chunk_idx + 1) * chunk_size), :],
-            h0=previous,
-        )
+        if chunk_idx == 0 and h0 is None:
+            outputs.append(local)
+        else:
+            if chunk_idx == 0:
+                prev = h0
+            else:
+                prev = chunk_starts[..., chunk_idx - 1, :]
+            start = chunk_idx * chunk_size
+            end = min(length, start + chunk_size)
+            a_chunk = a[..., start:end, :]
+            prefix = torch.cumprod(a_chunk, dim=-2)
+            outputs.append(local + prefix * prev.unsqueeze(-2))
+
     return torch.cat(outputs, dim=-2)

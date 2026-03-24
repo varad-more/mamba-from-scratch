@@ -359,6 +359,52 @@ def _launch_triton_fused(
     return torch.cat(outputs, dim=-1)
 
 
+class _FusedScanAutograd(torch.autograd.Function):
+    """Autograd wrapper: fused Triton forward, reference backward."""
+
+    @staticmethod
+    def forward(
+        ctx,
+        u: Tensor,
+        delta: Tensor,
+        A: Tensor,
+        B: Tensor,
+        C: Tensor,
+        D_skip: Optional[Tensor],
+        z: Optional[Tensor],
+        chunk_size: int,
+        layout: str,
+    ) -> Tensor:
+        ctx.save_for_backward(u, delta, A, B, C, D_skip, z)
+        return _launch_triton_fused(u, delta, A, B, C, D_skip, z, chunk_size=chunk_size, layout=layout)
+
+    @staticmethod
+    def backward(ctx, grad_output: Tensor):
+        u, delta, A, B, C, D_skip, z = ctx.saved_tensors
+        # Recompute with autograd-enabled reference path to get gradients
+        with torch.enable_grad():
+            u_ = u.detach().requires_grad_(True)
+            delta_ = delta.detach().requires_grad_(True)
+            A_ = A.detach().requires_grad_(True)
+            B_ = B.detach().requires_grad_(True)
+            C_ = C.detach().requires_grad_(True)
+            D_ = D_skip.detach().requires_grad_(True) if D_skip is not None else None
+            z_ = z.detach().requires_grad_(True) if z is not None else None
+            y = selective_scan_ref(u=u_, delta=delta_, A=A_, B=B_, C=C_, D=D_, z=z_)
+            y.backward(grad_output)
+        return (
+            u_.grad,
+            delta_.grad,
+            A_.grad,
+            B_.grad,
+            C_.grad,
+            D_.grad if D_ is not None else None,
+            z_.grad if z_ is not None else None,
+            None,  # chunk_size
+            None,  # layout
+        )
+
+
 def selective_scan_fused(
     u: Tensor,
     delta: Tensor,
@@ -388,7 +434,13 @@ def selective_scan_fused(
 
     supported, note, layout = _supported_triton_path(u, delta, A, B, C, D, z)
     if supported:
-        output = _launch_triton_fused(u, delta, A, B, C, D, z, chunk_size=chunk_size, layout=layout)
+        needs_grad = any(
+            t is not None and t.requires_grad for t in (u, delta, A, B, C, D, z)
+        )
+        if needs_grad:
+            output = _FusedScanAutograd.apply(u, delta, A, B, C, D, z, chunk_size, layout)
+        else:
+            output = _launch_triton_fused(u, delta, A, B, C, D, z, chunk_size=chunk_size, layout=layout)
         metadata = KernelMetadata(
             backend="triton-fused",
             used_fallback=False,
