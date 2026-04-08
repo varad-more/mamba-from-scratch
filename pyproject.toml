@@ -27,11 +27,16 @@ bench = [
   "accelerate>=0.33",
   "psutil>=6.0",
 ]
+serve = [
+  "fastapi>=0.115",
+  "uvicorn>=0.32",
+  "transformers>=4.46",
+]
 kernel = [
   "triton>=3.0; platform_system == 'Linux' and platform_machine == 'x86_64'",
 ]
 all = [
-  "mamba-from-scratch[dev,bench,kernel]",
+  "mamba-from-scratch[dev,bench,serve,kernel]",
 ]
 
 [tool.hatch.build.targets.wheel]

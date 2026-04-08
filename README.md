@@ -43,8 +43,9 @@ This project walks through the Mamba stack in layers:
 - ✅ Explicit backend capability and selection policy added (`auto` / `reference` / `fused`)
 - ✅ Official parity path working for `state-spaces/mamba-130m-hf`
 - ✅ Benchmarks and result-driven figure generation implemented
+- ✅ Lightweight FastAPI serving layer added for local inference demos
 - ✅ Colab/GPU runbook + one-shot validation runner added
-- ✅ Test suite passing on CPU: **26 passed, 2 skipped**
+- ✅ Test suite passing on CPU: **31 passed, 2 skipped**
 
 > This workspace is CPU-only, so the repository code is complete up to the point where **real CUDA execution and hardware benchmarks** are required. GPU-specific performance claims should be generated on Colab or another CUDA machine using the provided runbook.
 
@@ -105,6 +106,7 @@ mamba-from-scratch/
 │   ├── 05_profiling.ipynb
 │   └── 07_inference_comparison.ipynb
 ├── src/mamba_minimal/
+│   ├── api.py
 │   ├── discretization.py
 │   ├── selective_scan.py
 │   ├── model.py
@@ -163,6 +165,7 @@ Optional extras:
 
 ```bash
 uv pip install -e .[bench]     # transformers / accelerate / psutil
+uv pip install -e .[serve]     # FastAPI + Uvicorn serving layer
 uv pip install -e .[kernel]    # Triton (Linux + CUDA environments)
 ```
 
@@ -280,6 +283,41 @@ python -m mamba_minimal.generate \
   --model state-spaces/mamba-130m-hf \
   --max-new-tokens 32 \
   --device auto
+```
+
+### Serve a local generation API
+
+Install the serving extras first:
+
+```bash
+uv pip install -e .[serve]
+```
+
+Run the API:
+
+```bash
+python -m mamba_minimal.api --host 0.0.0.0 --port 8000
+```
+
+Example request:
+
+```bash
+curl -X POST http://127.0.0.1:8000/generate \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "prompt": "Mamba is useful because",
+    "model_name": "state-spaces/mamba-130m-hf",
+    "device": "auto",
+    "max_new_tokens": 32,
+    "do_sample": false,
+    "temperature": 1.0
+  }'
+```
+
+Health check:
+
+```bash
+curl http://127.0.0.1:8000/healthz
 ```
 
 ---
@@ -432,6 +470,7 @@ For the deeper architecture map and refactor plan, see [`ARCHITECTURE.md`](ARCHI
 | Discretization / SSM math | `src/mamba_minimal/discretization.py` | ZOH discretization helpers and stable inverse softplus |
 | Reference selective scan | `src/mamba_minimal/selective_scan.py` | Truth-path selective recurrence implementation |
 | Core Mamba block | `src/mamba_minimal/model.py` | Readable Mamba block wiring and backend dispatch |
+| Serving API | `src/mamba_minimal/api.py` | Lightweight FastAPI app for local inference demos |
 | Backend policy | `src/mamba_minimal/backend/` | Capability checks and explicit `auto` / `reference` / `fused` selection |
 | Parallel scan utilities | `src/mamba_minimal/parallel_scan.py` | Sequential, Hillis-Steele, and chunked affine scans |
 | SSD prototype | `src/mamba_minimal/ssd.py` | Minimal chunked SSD-style scan view |

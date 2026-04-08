@@ -47,6 +47,7 @@ tests/ + scripts/ + benchmarks/
   - `src/mamba_minimal/backend/`
   - `src/mamba_minimal/selective_scan.py`
   - `src/mamba_minimal/model.py`
+  - `src/mamba_minimal/api.py`
   - `src/mamba_minimal/parallel_scan.py`
   - `src/mamba_minimal/ssd.py`
   - `src/mamba_minimal/generate.py`
