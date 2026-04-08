@@ -17,8 +17,13 @@ jobs:
           uv venv .venv
           source .venv/bin/activate
           uv pip install --index-url https://download.pytorch.org/whl/cpu torch
-          uv pip install numpy pytest nbformat matplotlib
+          uv pip install numpy pytest nbformat matplotlib ruff
           uv pip install -e . --no-deps
+      - name: Run lint
+        run: |
+          source .venv/bin/activate
+          ruff check src tests benchmarks kernels \
+            --ignore E402,E501,UP045,UP035,UP037,B009,B905,F841,I001
       - name: Run tests
         run: |
           source .venv/bin/activate

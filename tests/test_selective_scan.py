@@ -128,3 +128,19 @@ def test_mamba_block_forward_shape_and_gradients() -> None:
     loss.backward()
     assert x.grad is not None
     assert torch.isfinite(x.grad).all()
+
+
+def test_selective_scan_long_sequence_stays_finite() -> None:
+    torch.manual_seed(0)
+    batch, channels, state, length = 1, 4, 8, 2048
+    u = torch.randn(batch, channels, length)
+    delta = torch.randn(batch, channels, length)
+    A = -torch.rand(channels, state)
+    B = torch.randn(batch, state, length)
+    C = torch.randn(batch, state, length)
+
+    y, last_state = selective_scan_ref(u, delta, A, B, C, return_last_state=True)
+    assert y.shape == (batch, channels, length)
+    assert last_state.shape == (batch, channels, state)
+    assert torch.isfinite(y).all()
+    assert torch.isfinite(last_state).all()

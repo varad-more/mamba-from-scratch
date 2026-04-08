@@ -2,37 +2,97 @@
   {
     "model_name": "state-spaces/mamba-130m-hf",
     "device": "cpu",
-    "prompt_tokens": 5,
+    "machine": "Linux 6.17.0-1010-aws (x86_64)",
+    "prompt_tokens": 24,
+    "target_prompt_tokens": 8,
     "new_tokens": 4,
-    "ttft_ms": 336.9482000125572,
-    "inter_token_ms": 76.90589164849371,
-    "peak_memory_mb": 922.8125
+    "ttft_ms": 398.72722199652344,
+    "inter_token_ms": 79.89676000822026,
+    "throughput_tokens_per_s": 12.516152092989929,
+    "peak_memory_mb": 961.203125
   },
   {
     "model_name": "gpt2",
     "device": "cpu",
-    "prompt_tokens": 5,
+    "machine": "Linux 6.17.0-1010-aws (x86_64)",
+    "prompt_tokens": 24,
+    "target_prompt_tokens": 8,
     "new_tokens": 4,
-    "ttft_ms": 102.83211106434464,
-    "inter_token_ms": 50.90696298672507,
-    "peak_memory_mb": 1450.671875
+    "ttft_ms": 182.1472720184829,
+    "inter_token_ms": 55.620236652127154,
+    "throughput_tokens_per_s": 17.979067695350334,
+    "peak_memory_mb": 1432.1171875
   },
   {
     "model_name": "state-spaces/mamba-130m-hf",
     "device": "cpu",
-    "prompt_tokens": 13,
+    "machine": "Linux 6.17.0-1010-aws (x86_64)",
+    "prompt_tokens": 48,
+    "target_prompt_tokens": 16,
     "new_tokens": 4,
-    "ttft_ms": 282.15059102512896,
-    "inter_token_ms": 70.20330429077148,
-    "peak_memory_mb": 1457.47265625
+    "ttft_ms": 966.3695670024026,
+    "inter_token_ms": 71.09083000492926,
+    "throughput_tokens_per_s": 14.066511812151617,
+    "peak_memory_mb": 1428.2265625
   },
   {
     "model_name": "gpt2",
     "device": "cpu",
-    "prompt_tokens": 13,
+    "machine": "Linux 6.17.0-1010-aws (x86_64)",
+    "prompt_tokens": 48,
+    "target_prompt_tokens": 16,
     "new_tokens": 4,
-    "ttft_ms": 109.38563803210855,
-    "inter_token_ms": 54.13645699930688,
-    "peak_memory_mb": 1965.15625
+    "ttft_ms": 195.0116869993508,
+    "inter_token_ms": 70.88364299852401,
+    "throughput_tokens_per_s": 14.107627058908678,
+    "peak_memory_mb": 1430.8359375
+  },
+  {
+    "model_name": "state-spaces/mamba-130m-hf",
+    "device": "cpu",
+    "machine": "Linux 6.17.0-1010-aws (x86_64)",
+    "prompt_tokens": 96,
+    "target_prompt_tokens": 32,
+    "new_tokens": 4,
+    "ttft_ms": 1563.3516070083715,
+    "inter_token_ms": 86.84258899302222,
+    "throughput_tokens_per_s": 11.515087373550664,
+    "peak_memory_mb": 1431.69140625
+  },
+  {
+    "model_name": "gpt2",
+    "device": "cpu",
+    "machine": "Linux 6.17.0-1010-aws (x86_64)",
+    "prompt_tokens": 96,
+    "target_prompt_tokens": 32,
+    "new_tokens": 4,
+    "ttft_ms": 271.60056302091107,
+    "inter_token_ms": 67.02703432529233,
+    "throughput_tokens_per_s": 14.919353214209789,
+    "peak_memory_mb": 1441.87890625
+  },
+  {
+    "model_name": "state-spaces/mamba-130m-hf",
+    "device": "cpu",
+    "machine": "Linux 6.17.0-1010-aws (x86_64)",
+    "prompt_tokens": 192,
+    "target_prompt_tokens": 64,
+    "new_tokens": 4,
+    "ttft_ms": 3165.566794021288,
+    "inter_token_ms": 149.87037131989686,
+    "throughput_tokens_per_s": 6.672432924487187,
+    "peak_memory_mb": 1448.69921875
+  },
+  {
+    "model_name": "gpt2",
+    "device": "cpu",
+    "machine": "Linux 6.17.0-1010-aws (x86_64)",
+    "prompt_tokens": 192,
+    "target_prompt_tokens": 64,
+    "new_tokens": 4,
+    "ttft_ms": 553.9913219981827,
+    "inter_token_ms": 79.14864900521934,
+    "throughput_tokens_per_s": 12.634454441971037,
+    "peak_memory_mb": 1468.578125
   }
 ]

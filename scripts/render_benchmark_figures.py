@@ -39,10 +39,19 @@ def render_inference_results(path: Path, out_path: Path) -> None:
     grouped: dict[str, dict[str, list[float]]] = {}
     for row in rows:
         model = row["model_name"]
-        stats = grouped.setdefault(model, {"prompt_tokens": [], "ttft_ms": [], "peak_memory_mb": []})
+        stats = grouped.setdefault(
+            model,
+            {
+                "prompt_tokens": [],
+                "ttft_ms": [],
+                "peak_memory_mb": [],
+                "throughput_tokens_per_s": [],
+            },
+        )
         stats["prompt_tokens"].append(row["prompt_tokens"])
         stats["ttft_ms"].append(row["ttft_ms"])
         stats["peak_memory_mb"].append(row["peak_memory_mb"])
+        stats["throughput_tokens_per_s"].append(row.get("throughput_tokens_per_s", 0.0))
 
     fig, axes = plt.subplots(1, 2, figsize=(11, 4))
     for model, stats in grouped.items():
@@ -64,6 +73,50 @@ def render_inference_results(path: Path, out_path: Path) -> None:
     fig.savefig(out_path, dpi=180)
 
 
+def render_memory_scaling(path: Path, out_path: Path) -> None:
+    rows = load_json(path)
+    grouped: dict[str, tuple[list[float], list[float]]] = {}
+    for row in rows:
+        xs, ys = grouped.setdefault(row["model_name"], ([], []))
+        xs.append(row["prompt_tokens"])
+        ys.append(row["peak_memory_mb"])
+
+    plt.figure(figsize=(6.5, 4.5))
+    for model, (xs, ys) in grouped.items():
+        pairs = sorted(zip(xs, ys))
+        plt.plot([x for x, _ in pairs], [y for _, y in pairs], marker="o", label=model)
+
+    plt.title("Peak memory vs prompt length")
+    plt.xlabel("Prompt tokens")
+    plt.ylabel("Peak memory (MB)")
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=180)
+
+
+def render_throughput_comparison(path: Path, out_path: Path) -> None:
+    rows = load_json(path)
+    grouped: dict[str, tuple[list[float], list[float]]] = {}
+    for row in rows:
+        xs, ys = grouped.setdefault(row["model_name"], ([], []))
+        xs.append(row["prompt_tokens"])
+        ys.append(row.get("throughput_tokens_per_s", 0.0))
+
+    plt.figure(figsize=(6.5, 4.5))
+    for model, (xs, ys) in grouped.items():
+        pairs = sorted(zip(xs, ys))
+        plt.plot([x for x, _ in pairs], [y for _, y in pairs], marker="o", label=model)
+
+    plt.title("Decode throughput vs prompt length")
+    plt.xlabel("Prompt tokens")
+    plt.ylabel("Throughput (tokens/s)")
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=180)
+
+
 def render_default_results(figures_dir: Path) -> None:
     scan_path = RESULTS / "scan_results.cpu.json"
     if scan_path.exists():
@@ -72,6 +125,8 @@ def render_default_results(figures_dir: Path) -> None:
     inference_path = RESULTS / "inference_results.cpu.json"
     if inference_path.exists():
         render_inference_results(inference_path, figures_dir / "inference_comparison_cpu.png")
+        render_memory_scaling(inference_path, figures_dir / "memory_scaling.png")
+        render_throughput_comparison(inference_path, figures_dir / "throughput_comparison.png")
 
     gpu_scan = RESULTS / "scan_results.gpu.json"
     if gpu_scan.exists():
@@ -80,6 +135,8 @@ def render_default_results(figures_dir: Path) -> None:
     gpu_inference = RESULTS / "inference_results.gpu.json"
     if gpu_inference.exists():
         render_inference_results(gpu_inference, figures_dir / "inference_comparison_gpu.png")
+        render_memory_scaling(gpu_inference, figures_dir / "memory_scaling.gpu.png")
+        render_throughput_comparison(gpu_inference, figures_dir / "throughput_comparison.gpu.png")
 
 
 def main() -> None:

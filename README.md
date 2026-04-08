@@ -40,10 +40,11 @@ This project walks through the Mamba stack in layers:
 - ✅ Parallel / chunked scan utilities implemented
 - ✅ Triton fused forward path added
 - ✅ Supports both shared and channel-specific `B/C` layouts in the fused path
+- ✅ Explicit backend capability and selection policy added (`auto` / `reference` / `fused`)
 - ✅ Official parity path working for `state-spaces/mamba-130m-hf`
 - ✅ Benchmarks and result-driven figure generation implemented
 - ✅ Colab/GPU runbook + one-shot validation runner added
-- ✅ Test suite passing: **15 passed, 2 skipped** by default
+- ✅ Test suite passing on CPU: **26 passed, 2 skipped**
 
 > This workspace is CPU-only, so the repository code is complete up to the point where **real CUDA execution and hardware benchmarks** are required. GPU-specific performance claims should be generated on Colab or another CUDA machine using the provided runbook.
 
@@ -69,9 +70,9 @@ That means the local `MambaBlock` can successfully load official mixer weights a
 
 From `benchmarks/results/scan_results.cpu.json` for a small sample run (`B=1, D=8, N=4, L=64`):
 
-- reference p50 latency: **3.89 ms**
-- naive p50 latency: **4.06 ms**
-- fused p50 latency: **3.84 ms**
+- reference p50 latency: **7.54 ms**
+- naive p50 latency: **7.53 ms**
+- fused path on CPU: **falls back to the reference backend**
 
 These are **sanity / plumbing results**, not final performance claims. Real kernel evaluation should be done on GPU.
 
@@ -79,9 +80,9 @@ These are **sanity / plumbing results**, not final performance claims. Real kern
 
 From `benchmarks/results/inference_results.cpu.json`:
 
-- CPU comparison is wired up and reproducible
+- CPU comparison is wired up and reproducible across a prompt-length sweep (`8, 16, 32, 64` target tokens)
 - Mamba parity / loading path works
-- memory and latency outputs are captured end-to-end
+- TTFT, decode throughput, and peak memory outputs are captured end-to-end
 
 These numbers should be treated as **CPU functional validation**, not the final systems story. The real value of the repo comes from running the GPU validation flow.
 
@@ -218,6 +219,7 @@ python benchmarks/benchmark_scan.py \
 ```bash
 python benchmarks/benchmark_inference.py \
   --device auto \
+  --prompt-lengths 8,32,128,512 \
   --new-tokens 32
 ```
 
@@ -226,6 +228,7 @@ Save output directly to JSON:
 ```bash
 python benchmarks/benchmark_inference.py \
   --device auto \
+  --prompt-lengths 8,32,128,512 \
   --new-tokens 32 \
   --output benchmarks/results/inference_results.gpu.json
 ```
@@ -341,14 +344,16 @@ Generated figure assets live in `figures/`:
 - `roofline.png`
 - `scan_benchmark_cpu.png`
 - `inference_comparison_cpu.png`
+- `memory_scaling.png`
+- `throughput_comparison.png`
 - `scan_benchmark_gpu.png` *(generated after GPU validation)*
 - `inference_comparison_gpu.png` *(generated after GPU validation)*
-- `memory_scaling.png` *(illustrative placeholder)*
-- `throughput_comparison.png` *(illustrative placeholder)*
+- `memory_scaling.gpu.png` *(generated after GPU validation)*
+- `throughput_comparison.gpu.png` *(generated after GPU validation)*
 
 Important note:
-- `scan_benchmark_cpu.png` and `inference_comparison_cpu.png` are generated from actual saved results
-- `memory_scaling.png` and `throughput_comparison.png` are still illustrative placeholders until replaced with measured GPU production runs
+- CPU figures are generated from saved benchmark results
+- GPU-specific figures should still be regenerated from real CUDA runs before making hardware claims
 
 ---
 
@@ -371,8 +376,8 @@ Performance claims should only be made after the correctness path is green.
 
 - This workspace is CPU-only, so true Triton CUDA execution cannot be benchmarked here.
 - The fused Triton path is implemented, but final performance claims still require GPU runs.
+- The unfused `scan_naive.py` path is an honest reference-wrapper baseline, not a production Triton kernel.
 - Official parity currently focuses on mixer-level validation rather than the full end-to-end pretrained model stack.
-- Some figures are still placeholders until GPU results are generated.
 - Inference benchmarks depend on model downloads and network availability.
 
 ---
@@ -380,7 +385,7 @@ Performance claims should only be made after the correctness path is green.
 ## Next steps
 
 - run the full GPU validation flow on Colab or another CUDA machine
-- replace illustrative figures with measured GPU figures
+- regenerate GPU figures from measured CUDA benchmark runs
 - extend parity from sampled layers to broader model sweeps
 - tighten the final README results section with real T4 / A100 measurements
 - optionally add a lightweight serving demo
@@ -401,20 +406,21 @@ Performance claims should only be made after the correctness path is green.
 If you want the short version of how this repo is structured, use this mental model:
 
 ```text
-Hugging Face checkpoint/config
+Input hidden states
         ↓
-utils/hf_loader.py
+src/mamba_minimal/model.py
+(MambaBlock wiring)
         ↓
-mixer_seq_simple.py
-(model assembly / LM wrapper)
+src/mamba_minimal/selective_scan.py
+(reference selective scan)
         ↓
-modules/mamba_simple.py
-(core Mamba block / mixer logic)
+src/mamba_minimal/backend/*
+(capability checks + backend policy)
         ↓
-ops/selective_scan_interface.py
-(low-level selective scan execution path)
+kernels/scan_fused.py
+(optional Triton fused path)
         ↓
-validation / benchmark scripts
+tests/ + scripts/ + benchmarks/
 ```
 
 For the deeper architecture map and refactor plan, see [`ARCHITECTURE.md`](ARCHITECTURE.md).
@@ -423,32 +429,27 @@ For the deeper architecture map and refactor plan, see [`ARCHITECTURE.md`](ARCHI
 
 | Area | File(s) | Responsibility |
 |---|---|---|
-| Top-level model assembly | `src/mamba_from_scratch/mixer_seq_simple.py` | Builds the full language model stack and connects backbone + LM head |
-| Core Mamba block | `src/mamba_from_scratch/modules/mamba_simple.py` | Main Mamba mixing/block behavior |
-| Selective scan / ops | `src/mamba_from_scratch/ops/selective_scan_interface.py` | Backend-facing selective scan execution path |
-| Hugging Face interop | `src/mamba_from_scratch/utils/hf_loader.py` | Loads/translates HF configs and weights into the local model |
-| Validation entrypoint | `scripts/run_gpu_validation.py` | GPU validation, parity checks, and benchmark-oriented execution |
-| Tests | `tests/` | Smoke, parity, and behavior checks |
+| Discretization / SSM math | `src/mamba_minimal/discretization.py` | ZOH discretization helpers and stable inverse softplus |
+| Reference selective scan | `src/mamba_minimal/selective_scan.py` | Truth-path selective recurrence implementation |
+| Core Mamba block | `src/mamba_minimal/model.py` | Readable Mamba block wiring and backend dispatch |
+| Backend policy | `src/mamba_minimal/backend/` | Capability checks and explicit `auto` / `reference` / `fused` selection |
+| Parallel scan utilities | `src/mamba_minimal/parallel_scan.py` | Sequential, Hillis-Steele, and chunked affine scans |
+| SSD prototype | `src/mamba_minimal/ssd.py` | Minimal chunked SSD-style scan view |
+| Kernel entrypoints | `kernels/scan_naive.py`, `kernels/scan_fused.py` | Unfused baseline wrapper and fused Triton implementation |
+| Validation entrypoint | `scripts/run_gpu_validation.py` | Runs parity, scan benchmarks, inference benchmarks, and figure generation |
+| Tests | `tests/` | Correctness, parity, and regression coverage |
 
 ### How to read the codebase
 
 | Reading order | Why |
 |---|---|
 | `README.md` | Understand project goals and usage |
-| `ARCHITECTURE.md` | Get the current layer boundaries and refactor direction |
-| `mixer_seq_simple.py` | See how the model is assembled end-to-end |
-| `modules/mamba_simple.py` | Understand the core Mamba block behavior |
-| `ops/selective_scan_interface.py` | Understand how the low-level scan path is executed |
-| `utils/hf_loader.py` | See how checkpoints/configs are loaded from HF |
-| `scripts/run_gpu_validation.py` | See how correctness/perf validation is actually run |
-
-### Current architecture priorities
-
-The next best cleanup steps for this repo are:
-
-1. make backend/runtime selection more explicit,
-2. split Hugging Face loader responsibilities,
-3. keep validation/reporting layered on top of the model implementation rather than mixed into it.
+| `ARCHITECTURE.md` | Get the current layer boundaries |
+| `src/mamba_minimal/model.py` | See how the Mamba block is assembled |
+| `src/mamba_minimal/selective_scan.py` | Understand the truth-path recurrence |
+| `src/mamba_minimal/backend/` | Understand backend eligibility and policy |
+| `kernels/scan_fused.py` | See the fused Triton path |
+| `scripts/run_gpu_validation.py` | See how correctness and benchmark flows are executed |
 
 
 ## License

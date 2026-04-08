@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import platform
 import sys
 import time
 from dataclasses import asdict, dataclass
@@ -24,6 +25,9 @@ from mamba_minimal.selective_scan import selective_scan_ref
 class BenchmarkResult:
     name: str
     device: str
+    selected_backend: str
+    used_fallback: bool
+    notes: str
     batch: int
     channels: int
     state: int
@@ -34,6 +38,8 @@ class BenchmarkResult:
     throughput_tokens_per_s: float
     estimated_bytes: float
     achieved_bandwidth_gb_s: float
+    arithmetic_intensity_flops_per_byte: float
+    machine: str
 
 
 def percentile(values: list[float], p: float) -> float:
@@ -57,12 +63,29 @@ def estimate_bytes(*tensors: Tensor) -> float:
     return float(sum(t.numel() * t.element_size() for t in tensors))
 
 
+def estimate_scan_flops(batch: int, channels: int, state: int, length: int, has_d: bool, has_z: bool) -> float:
+    per_token = 4 * state + 2  # recurrence + output projection, rough but consistent
+    if has_d:
+        per_token += 1
+    if has_z:
+        per_token += 4  # cheap SiLU-style gating approximation
+    return float(batch * channels * length * per_token)
+
+
+def machine_summary(device: str) -> str:
+    if device.startswith("cuda"):
+        return torch.cuda.get_device_name(0)
+    return f"{platform.system()} {platform.release()} ({platform.machine()})"
+
+
 def benchmark(
     name: str,
     fn: Callable[[], Tensor],
+    metadata_fn: Callable[[], tuple[str, bool, str]],
     length: int,
     batch: int,
     estimated_bytes: float,
+    estimated_flops: float,
     device: str,
     channels: int,
     state: int,
@@ -70,6 +93,7 @@ def benchmark(
     warmup: int,
     repeats: int,
 ) -> BenchmarkResult:
+    selected_backend, used_fallback, notes = metadata_fn()
     for _ in range(warmup):
         _ = fn()
     if device.startswith("cuda"):
@@ -87,9 +111,13 @@ def benchmark(
     p95 = percentile(timings, 0.95)
     throughput = (batch * length) / (p50 / 1000.0)
     bandwidth = (estimated_bytes / 1e9) / (p50 / 1000.0)
+    arithmetic_intensity = estimated_flops / max(estimated_bytes, 1.0)
     return BenchmarkResult(
         name=name,
         device=device,
+        selected_backend=selected_backend,
+        used_fallback=used_fallback,
+        notes=notes,
         batch=batch,
         channels=channels,
         state=state,
@@ -100,6 +128,8 @@ def benchmark(
         throughput_tokens_per_s=throughput,
         estimated_bytes=estimated_bytes,
         achieved_bandwidth_gb_s=bandwidth,
+        arithmetic_intensity_flops_per_byte=arithmetic_intensity,
+        machine=machine_summary(device),
     )
 
 
@@ -115,14 +145,18 @@ def run_scan_benchmarks(
 ) -> list[BenchmarkResult]:
     u, delta, A, B, C, D, z = make_inputs(batch, channels, state, length, device, dtype)
     touched = estimate_bytes(u, delta, A, B, C, D, z)
+    estimated_flops = estimate_scan_flops(batch, channels, state, length, has_d=True, has_z=True)
+    _, fused_metadata = selective_scan_fused(u, delta, A, B, C, D=D, z=z, return_metadata=True)
 
     return [
         benchmark(
             "reference",
             lambda: selective_scan_ref(u, delta, A, B, C, D=D, z=z),
+            lambda: ("torch-reference", False, "Reference backend."),
             length,
             batch,
             touched,
+            estimated_flops,
             device,
             channels,
             state,
@@ -133,9 +167,15 @@ def run_scan_benchmarks(
         benchmark(
             "naive",
             lambda: selective_scan_naive(u, delta, A, B, C, D=D, z=z),
+            lambda: (
+                "torch-reference-wrapper",
+                True,
+                "Unfused baseline wrapper, delegates to the PyTorch reference implementation.",
+            ),
             length,
             batch,
             touched,
+            estimated_flops,
             device,
             channels,
             state,
@@ -146,9 +186,15 @@ def run_scan_benchmarks(
         benchmark(
             "fused",
             lambda: selective_scan_fused(u, delta, A, B, C, D=D, z=z),
+            lambda: (
+                fused_metadata.selected_backend,
+                fused_metadata.used_fallback,
+                fused_metadata.notes,
+            ),
             length,
             batch,
             touched,
+            estimated_flops,
             device,
             channels,
             state,

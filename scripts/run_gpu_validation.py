@@ -29,6 +29,7 @@ def main() -> None:
     parser.add_argument("--warmup", type=int, default=5)
     parser.add_argument("--repeats", type=int, default=20)
     parser.add_argument("--new-tokens", type=int, default=16)
+    parser.add_argument("--prompt-lengths", default="8,32,128,512")
     parser.add_argument("--mamba-model", default="state-spaces/mamba-130m-hf")
     parser.add_argument("--baseline-model", default="gpt2")
     parser.add_argument("--parity-model", default="state-spaces/mamba-130m-hf")
@@ -97,6 +98,8 @@ def main() -> None:
             args.device,
             "--new-tokens",
             str(args.new_tokens),
+            "--prompt-lengths",
+            args.prompt_lengths,
             "--mamba-model",
             args.mamba_model,
             "--baseline-model",

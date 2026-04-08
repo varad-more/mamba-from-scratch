@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Tuple
-
 import torch
 from torch import Tensor
 
@@ -23,7 +21,7 @@ def inverse_softplus(x: Tensor) -> Tensor:
     return x + torch.log(-torch.expm1(-x))
 
 
-def zoh_discretize(A: Tensor, B: Tensor, delta: Tensor) -> Tuple[Tensor, Tensor]:
+def zoh_discretize(A: Tensor, B: Tensor, delta: Tensor) -> tuple[Tensor, Tensor]:
     """Discretize a continuous-time linear system with zero-order hold.
 
     The continuous system is:

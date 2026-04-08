@@ -25,13 +25,16 @@ The architecture must keep these concerns separated so we can teach and optimize
 Input tokens/hidden states
         ↓
 src/mamba_minimal/model.py
-(MambaBlock + generation path)
+(MambaBlock wiring)
+        ↓
+src/mamba_minimal/backend/policy.py
+(explicit backend selection)
         ↓
 src/mamba_minimal/selective_scan.py
 (reference scan math)
         ↓
-kernels/scan_fused.py
-(optional Triton fused path + fallback metadata)
+kernels/scan_fused.py / kernels/scan_naive.py
+(optimized path + honest unfused baseline wrapper)
         ↓
 tests/ + scripts/ + benchmarks/
 (parity, validation, performance)
@@ -41,6 +44,7 @@ tests/ + scripts/ + benchmarks/
 
 - **Core math + model layer**
   - `src/mamba_minimal/discretization.py`
+  - `src/mamba_minimal/backend/`
   - `src/mamba_minimal/selective_scan.py`
   - `src/mamba_minimal/model.py`
   - `src/mamba_minimal/parallel_scan.py`
@@ -101,28 +105,29 @@ tests/ + scripts/ + benchmarks/
 ## 4) Current strengths
 
 - Reference implementation is readable and easy to test.
-- Fused kernel entrypoint already contains support checks and fallback metadata.
+- Backend capability and policy are now explicit and testable.
+- Fused kernel entrypoint contains fallback metadata instead of silent behavior changes.
 - Benchmarks and parity scripts are scriptable and CI-friendly.
 
 ---
 
 ## 5) Current gaps to address
 
-1. **Backend selection policy is split across call sites**
-   - behavior exists, but not centrally represented as a reusable policy module.
+1. **GPU validation is still hardware-gated**
+   - CUDA/Triton performance claims still need to be generated on a GPU host.
 
-2. **Kernel capability reporting is local to one path**
-   - we should expose a single capability API for diagnostics and experiment logs.
+2. **The unfused baseline is still a wrapper, not a real Triton decomposition**
+   - this is honest today, but a future kernel baseline would improve systems analysis.
 
-3. **Model → backend intent is implicit**
-   - model code should request a backend policy, not hardcode assumptions.
+3. **Inference benchmarks remain benchmark-harness quality, not serving-stack quality**
+   - they measure TTFT, decode throughput, and memory, but not full production serving behavior.
 
-4. **Validation output lacks standardized backend capability snapshot**
-   - results should include “what backend was eligible + why fallback occurred”.
+4. **Official parity is mixer-level, not full-model end-to-end parity**
+   - this is sufficient for current repo goals, but not the final ceiling.
 
 ---
 
-## 6) Target next-step architecture (incremental, no giant rewrite)
+## 6) Current architecture snapshot
 
 ```text
 src/mamba_minimal/
@@ -142,9 +147,9 @@ Key rule: **reference path remains the correctness anchor** and every optimized 
 
 ---
 
-## 7) Refactor phases
+## 7) Implemented refactor phases
 
-## Phase 1 — Capability surface (immediate)
+## Phase 1 — Capability surface
 
 - Introduce `src/mamba_minimal/backend/types.py` for shared metadata dataclasses.
 - Move/centralize capability checks into `backend/capability.py`.
@@ -187,9 +192,9 @@ Key rule: **reference path remains the correctness anchor** and every optimized 
 
 ## 9) Immediate implementation plan (this sprint)
 
-1. Add backend metadata + capability module.
-2. Add tests for policy/capability behavior on CPU-only hosts.
-3. Wire benchmark JSON to include backend selection notes.
-4. Update README “Architecture map” to point to the new boundary files.
+1. Generate fresh GPU benchmark artifacts.
+2. Replace CPU-only sample figures in the README with measured GPU figures where appropriate.
+3. Decide whether to build a true unfused Triton baseline or keep the current honest wrapper.
+4. Extend parity from sampled mixer layers to broader sweeps if needed.
 
 This keeps momentum high with minimal risk.

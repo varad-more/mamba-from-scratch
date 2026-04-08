@@ -3,24 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-import torch
 from torch import Tensor
 
 from mamba_minimal.selective_scan import selective_scan_ref
-
-try:
-    import triton  # type: ignore
-
-    TRITON_AVAILABLE = True
-except Exception:  # pragma: no cover - optional dependency
-    triton = None
-    TRITON_AVAILABLE = False
-
 
 @dataclass(slots=True)
 class KernelMetadata:
     backend: str
     used_fallback: bool
+    notes: str
 
 
 def selective_scan_naive(
@@ -35,15 +26,16 @@ def selective_scan_naive(
 ) -> Tensor | tuple[Tensor, KernelMetadata]:
     """Naive kernel entry point.
 
-    The project keeps a working reference fallback at all times. When Triton is
-    unavailable, this function delegates to the PyTorch reference path so the
-    rest of the repo remains runnable on CPU-only environments.
+    This path is intentionally an unfused baseline wrapper around the reference
+    implementation. It exists so benchmark and validation code can compare a
+    non-fused call site against the fused path without lying about behavior.
     """
 
     output = selective_scan_ref(u=u, delta=delta, A=A, B=B, C=C, D=D, z=z)
     metadata = KernelMetadata(
-        backend="triton" if TRITON_AVAILABLE and u.is_cuda else "torch-reference",
-        used_fallback=not (TRITON_AVAILABLE and u.is_cuda),
+        backend="torch-reference-wrapper",
+        used_fallback=True,
+        notes="Unfused baseline wrapper, delegates to the PyTorch reference implementation.",
     )
     if return_metadata:
         return output, metadata

@@ -8,6 +8,7 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 
+from .backend import ScanBackend, select_scan_backend
 from .discretization import inverse_softplus
 from .selective_scan import selective_scan_ref
 
@@ -56,6 +57,7 @@ class MambaBlock(nn.Module):
         bias: bool = False,
         conv_bias: bool = True,
         use_fused_kernel: bool = False,
+        scan_backend: ScanBackend = "auto",
     ) -> None:
         super().__init__()
         self.config = MambaBlockConfig(
@@ -72,7 +74,11 @@ class MambaBlock(nn.Module):
         self.d_conv = d_conv
         self.d_inner = self.config.d_inner
         self.dt_rank = self.config.resolved_dt_rank()
-        self.use_fused_kernel = use_fused_kernel and _FUSED_AVAILABLE
+        if use_fused_kernel and scan_backend != "auto":
+            raise ValueError("use_fused_kernel and scan_backend cannot both be set explicitly")
+        if use_fused_kernel:
+            scan_backend = "fused"
+        self.scan_backend: ScanBackend = scan_backend
 
         self.in_proj = nn.Linear(d_model, self.d_inner * 2, bias=bias)
         self.conv1d = nn.Conv1d(
@@ -138,18 +144,43 @@ class MambaBlock(nn.Module):
         dt = self.dt_proj(dt)
 
         A = -torch.exp(self.A_log.float())
-        scan_fn = selective_scan_ref
-        if self.use_fused_kernel:
-            scan_fn = selective_scan_fused
-        y = scan_fn(
-            u=x.transpose(1, 2),
-            delta=dt.transpose(1, 2),
-            A=A,
-            B=B.transpose(1, 2),
-            C=C.transpose(1, 2),
+        u = x.transpose(1, 2)
+        delta = dt.transpose(1, 2)
+        B_scan = B.transpose(1, 2)
+        C_scan = C.transpose(1, 2)
+        z_scan = z.transpose(1, 2)
+        dispatch = select_scan_backend(
+            u,
+            delta,
+            A,
+            B_scan,
+            C_scan,
             D=self.D.float(),
-            z=z.transpose(1, 2),
+            z=z_scan,
+            requested_backend=self.scan_backend,
+            triton_available=_FUSED_AVAILABLE,
         )
+
+        if dispatch.selected_backend == "triton-fused":
+            y = selective_scan_fused(
+                u=u,
+                delta=delta,
+                A=A,
+                B=B_scan,
+                C=C_scan,
+                D=self.D.float(),
+                z=z_scan,
+            )
+        else:
+            y = selective_scan_ref(
+                u=u,
+                delta=delta,
+                A=A,
+                B=B_scan,
+                C=C_scan,
+                D=self.D.float(),
+                z=z_scan,
+            )
         y = y.transpose(1, 2)
         return self.out_proj(y)
 
