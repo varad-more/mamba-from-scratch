@@ -84,14 +84,18 @@ mamba-from-scratch/
 ├── CONTRACTS.md                    # Shape / dtype / tolerance contracts
 ├── ARCHITECTURE.md                 # Architecture source of truth
 ├── notebooks/
-│   ├── 01_ssm_basics.ipynb         # Classical SSMs in NumPy
-│   ├── 02_selective_scan.ipynb     # Selective scan walkthrough
-│   ├── 03_parallel_scan.ipynb      # Parallel scan algorithms
-│   ├── 05_profiling.ipynb          # Roofline and bandwidth analysis
-│   └── 07_inference_comparison.ipynb # Mamba vs GPT-2 on GPU
+│   ├── 01_selective_scan_derivation.ipynb  # Tiny-tensor derivation + mamba_ssm parity
+│   ├── 02_mamba130m_naive_generate.ipynb   # Mamba-130m generation via our naive scan
+│   ├── 01_ssm_basics.ipynb                 # Classical SSMs in NumPy
+│   ├── 02_selective_scan.ipynb             # Selective scan walkthrough
+│   ├── 03_parallel_scan.ipynb              # Parallel scan algorithms
+│   ├── 05_profiling.ipynb                  # Roofline and bandwidth analysis
+│   └── 07_inference_comparison.ipynb       # Mamba vs GPT-2 on GPU
 ├── src/mamba_minimal/
 │   ├── discretization.py           # ZOH discretization
-│   ├── selective_scan.py           # Reference selective scan (truth path)
+│   ├── scan_naive.py               # Naive selective scan, oracle-matching (mamba_ssm)
+│   ├── selective_scan.py           # Earlier reference selective scan (legacy API)
+│   ├── weights.py                  # HF Mamba checkpoint loader + mixer extractor
 │   ├── model.py                    # Readable MambaBlock
 │   ├── parallel_scan.py            # Sequential, Hillis-Steele, chunked scans
 │   ├── ssd.py                      # Mamba-2 SSD prototype
@@ -107,7 +111,7 @@ mamba-from-scratch/
 │   ├── benchmark_inference.py      # Mamba vs GPT-2 inference
 │   ├── roofline.py                 # Roofline chart generation
 │   └── results/                    # Saved JSON benchmark artifacts
-├── tests/                          # 33 tests (32 pass, 1 skip)
+├── tests/                          # 44 tests (40 pass, 4 gpu-skipped on CPU)
 ├── scripts/                        # Parity, validation, figure rendering
 └── figures/                        # Generated charts
 ```
@@ -139,6 +143,16 @@ uv pip install -e .[bench]     # transformers / accelerate / psutil
 uv pip install -e .[serve]     # FastAPI + Uvicorn serving layer
 uv pip install -e .[kernel]    # Triton (Linux + CUDA environments)
 ```
+
+The `mamba_ssm` package is used as the correctness oracle in `tests/test_naive_vs_reference.py` but is not a runtime dependency. Install the prebuilt wheel for your torch+CUDA combo from the state-spaces releases page (example for torch 2.4 + cu12):
+
+```bash
+pip install \
+  "https://github.com/Dao-AILab/causal-conv1d/releases/download/v1.4.0/causal_conv1d-1.4.0+cu122torch2.4cxx11abiFALSE-cp311-cp311-linux_x86_64.whl" \
+  "https://github.com/state-spaces/mamba/releases/download/v2.2.2/mamba_ssm-2.2.2+cu122torch2.4cxx11abiFALSE-cp311-cp311-linux_x86_64.whl"
+```
+
+Tests that require `mamba_ssm` are auto-skipped when the package is absent.
 
 ### 3) Run tests
 
