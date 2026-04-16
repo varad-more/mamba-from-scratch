@@ -10,7 +10,8 @@ This repo is both:
 
 ## What this proves
 
-- Rebuilt selective scan from scratch in PyTorch and validated parity against official `mamba-130m-hf` checkpoints (max error = 0.0 across 5 sampled layers)
+- Rebuilt selective scan from scratch in PyTorch and validated parity against the **`mamba_ssm` reference** (CPU fp32: bit-exact; CUDA fused fp32/fp16: within tolerance)
+- Loaded pretrained `state-spaces/mamba-130m-hf` weights into the from-scratch block and drove full-model generation through the naive scan, **token-exact** vs the unpatched HuggingFace baseline
 - Built and benchmarked a fused Triton kernel for selective scan, achieving **74-121x speedup** over the PyTorch reference on an A10G GPU
 - Analyzed memory bandwidth utilization and roofline positioning, confirming selective scan is **memory-bound**
 - Compared Mamba and GPT-2 inference behavior on GPU, measuring TTFT, decode throughput, and memory scaling
@@ -29,7 +30,22 @@ This repo is both:
 | 1024       | 139.57         | 1.231              | 113x    | 7.8               |
 | 2048       | 283.38         | 2.344              | 121x    | 8.2               |
 
-### Official model parity
+### Reference parity (naive selective scan vs `mamba_ssm`)
+
+Phase 1 anchor: the from-scratch scan must match the authoritative reference.
+
+| Check | Setting | Max abs diff |
+|---|---|---:|
+| `selective_scan_naive` vs `mamba_ssm.selective_scan_ref` | CPU, fp32, gate × skip × softplus sweep | **0.0** (bit-exact) |
+| `selective_scan_naive` vs `mamba_ssm.selective_scan_fn` (fused CUDA) | A10G, fp32 | < 1e-5 |
+| `selective_scan_naive` vs `mamba_ssm.selective_scan_fn` (fused CUDA) | A10G, fp16 | < 2e-3 |
+| `MambaBlock` (our layer-0) vs HF `MambaMixer` | A10G, fp32, random input | **0.0** |
+| HF full-model logits, scan swapped for `selective_scan_naive` | A10G, fp32, 24 layers patched | **0.0** |
+| Greedy generation with patched scan vs unpatched HF | A10G, 20 new tokens | **token-exact** |
+
+Reproduced by `tests/test_naive_vs_reference.py` and notebooks `01_selective_scan_derivation.ipynb` / `02_mamba130m_naive_generate.ipynb`.
+
+### Official model parity (per-layer mixer)
 
 | Layers tested | Max absolute error | Mean absolute error |
 |---------------|-------------------:|--------------------:|
