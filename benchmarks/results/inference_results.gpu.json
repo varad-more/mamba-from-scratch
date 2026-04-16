@@ -1,0 +1,122 @@
+[
+  {
+    "model_name": "state-spaces/mamba-130m-hf",
+    "device": "cuda",
+    "machine": "NVIDIA A10G",
+    "prompt_tokens": 24,
+    "target_prompt_tokens": 8,
+    "new_tokens": 32,
+    "ttft_ms": 311.5946249999979,
+    "inter_token_ms": 13.193257387097072,
+    "throughput_tokens_per_s": 75.79629280771815,
+    "peak_memory_mb": 988.54736328125
+  },
+  {
+    "model_name": "gpt2",
+    "device": "cuda",
+    "machine": "NVIDIA A10G",
+    "prompt_tokens": 24,
+    "target_prompt_tokens": 8,
+    "new_tokens": 32,
+    "ttft_ms": 43.29889400014508,
+    "inter_token_ms": 6.2561907096741995,
+    "throughput_tokens_per_s": 159.84167465573896,
+    "peak_memory_mb": 982.970703125
+  },
+  {
+    "model_name": "state-spaces/mamba-130m-hf",
+    "device": "cuda",
+    "machine": "NVIDIA A10G",
+    "prompt_tokens": 96,
+    "target_prompt_tokens": 32,
+    "new_tokens": 32,
+    "ttft_ms": 192.21831400000156,
+    "inter_token_ms": 19.276003709680275,
+    "throughput_tokens_per_s": 51.8779730000678,
+    "peak_memory_mb": 1013.9541015625
+  },
+  {
+    "model_name": "gpt2",
+    "device": "cuda",
+    "machine": "NVIDIA A10G",
+    "prompt_tokens": 96,
+    "target_prompt_tokens": 32,
+    "new_tokens": 32,
+    "ttft_ms": 10.355877999927543,
+    "inter_token_ms": 7.117633903230707,
+    "throughput_tokens_per_s": 140.49612744849074,
+    "peak_memory_mb": 994.21435546875
+  },
+  {
+    "model_name": "state-spaces/mamba-130m-hf",
+    "device": "cuda",
+    "machine": "NVIDIA A10G",
+    "prompt_tokens": 192,
+    "target_prompt_tokens": 64,
+    "new_tokens": 32,
+    "ttft_ms": 365.4588110000532,
+    "inter_token_ms": 18.987798290320445,
+    "throughput_tokens_per_s": 52.665400417160406,
+    "peak_memory_mb": 1049.82958984375
+  },
+  {
+    "model_name": "gpt2",
+    "device": "cuda",
+    "machine": "NVIDIA A10G",
+    "prompt_tokens": 192,
+    "target_prompt_tokens": 64,
+    "new_tokens": 32,
+    "ttft_ms": 11.628055999835851,
+    "inter_token_ms": 7.19376429033365,
+    "throughput_tokens_per_s": 139.0092807660813,
+    "peak_memory_mb": 1004.40478515625
+  },
+  {
+    "model_name": "state-spaces/mamba-130m-hf",
+    "device": "cuda",
+    "machine": "NVIDIA A10G",
+    "prompt_tokens": 384,
+    "target_prompt_tokens": 128,
+    "new_tokens": 32,
+    "ttft_ms": 702.5166760001866,
+    "inter_token_ms": 19.209776129026714,
+    "throughput_tokens_per_s": 52.05682738222864,
+    "peak_memory_mb": 1112.83154296875
+  },
+  {
+    "model_name": "gpt2",
+    "device": "cuda",
+    "machine": "NVIDIA A10G",
+    "prompt_tokens": 384,
+    "target_prompt_tokens": 128,
+    "new_tokens": 32,
+    "ttft_ms": 10.238216000061584,
+    "inter_token_ms": 7.266570709677375,
+    "throughput_tokens_per_s": 137.61649613733664,
+    "peak_memory_mb": 1055.787109375
+  },
+  {
+    "model_name": "state-spaces/mamba-130m-hf",
+    "device": "cuda",
+    "machine": "NVIDIA A10G",
+    "prompt_tokens": 768,
+    "target_prompt_tokens": 256,
+    "new_tokens": 32,
+    "ttft_ms": 1394.751875999873,
+    "inter_token_ms": 19.35554803225709,
+    "throughput_tokens_per_s": 51.664773238838016,
+    "peak_memory_mb": 1240.46044921875
+  },
+  {
+    "model_name": "gpt2",
+    "device": "cuda",
+    "machine": "NVIDIA A10G",
+    "prompt_tokens": 768,
+    "target_prompt_tokens": 256,
+    "new_tokens": 32,
+    "ttft_ms": 18.286262999936298,
+    "inter_token_ms": 7.476680516131842,
+    "throughput_tokens_per_s": 133.74919495923078,
+    "peak_memory_mb": 1082.0517578125
+  }
+]

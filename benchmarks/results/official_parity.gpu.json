@@ -1,0 +1,100 @@
+{
+  "model": "state-spaces/mamba-130m-hf",
+  "device": "cuda",
+  "layers": [
+    0,
+    5,
+    11,
+    17,
+    23
+  ],
+  "max_abs_error": 0.0,
+  "mean_abs_error": 0.0,
+  "results": [
+    {
+      "model": "state-spaces/mamba-130m-hf",
+      "layer": 0,
+      "device": "cuda",
+      "max_abs_error": 0.0,
+      "mean_abs_error": 0.0,
+      "local_shape": [
+        2,
+        16,
+        768
+      ],
+      "official_shape": [
+        2,
+        16,
+        768
+      ]
+    },
+    {
+      "model": "state-spaces/mamba-130m-hf",
+      "layer": 5,
+      "device": "cuda",
+      "max_abs_error": 0.0,
+      "mean_abs_error": 0.0,
+      "local_shape": [
+        2,
+        16,
+        768
+      ],
+      "official_shape": [
+        2,
+        16,
+        768
+      ]
+    },
+    {
+      "model": "state-spaces/mamba-130m-hf",
+      "layer": 11,
+      "device": "cuda",
+      "max_abs_error": 0.0,
+      "mean_abs_error": 0.0,
+      "local_shape": [
+        2,
+        16,
+        768
+      ],
+      "official_shape": [
+        2,
+        16,
+        768
+      ]
+    },
+    {
+      "model": "state-spaces/mamba-130m-hf",
+      "layer": 17,
+      "device": "cuda",
+      "max_abs_error": 0.0,
+      "mean_abs_error": 0.0,
+      "local_shape": [
+        2,
+        16,
+        768
+      ],
+      "official_shape": [
+        2,
+        16,
+        768
+      ]
+    },
+    {
+      "model": "state-spaces/mamba-130m-hf",
+      "layer": 23,
+      "device": "cuda",
+      "max_abs_error": 0.0,
+      "mean_abs_error": 0.0,
+      "local_shape": [
+        2,
+        16,
+        768
+      ],
+      "official_shape": [
+        2,
+        16,
+        768
+      ]
+    }
+  ]
+}

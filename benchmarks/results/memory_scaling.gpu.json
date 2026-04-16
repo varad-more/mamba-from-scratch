@@ -1,0 +1,114 @@
+[
+  {
+    "model": "state-spaces/mamba-130m-hf",
+    "target_prompt_tokens": 16,
+    "actual_prompt_tokens": 16,
+    "new_tokens": 16,
+    "peak_memory_mb": 511.26
+  },
+  {
+    "model": "state-spaces/mamba-130m-hf",
+    "target_prompt_tokens": 32,
+    "actual_prompt_tokens": 32,
+    "new_tokens": 16,
+    "peak_memory_mb": 516.16
+  },
+  {
+    "model": "state-spaces/mamba-130m-hf",
+    "target_prompt_tokens": 64,
+    "actual_prompt_tokens": 64,
+    "new_tokens": 16,
+    "peak_memory_mb": 526.95
+  },
+  {
+    "model": "state-spaces/mamba-130m-hf",
+    "target_prompt_tokens": 128,
+    "actual_prompt_tokens": 128,
+    "new_tokens": 16,
+    "peak_memory_mb": 549.03
+  },
+  {
+    "model": "state-spaces/mamba-130m-hf",
+    "target_prompt_tokens": 256,
+    "actual_prompt_tokens": 256,
+    "new_tokens": 16,
+    "peak_memory_mb": 594.2
+  },
+  {
+    "model": "state-spaces/mamba-130m-hf",
+    "target_prompt_tokens": 512,
+    "actual_prompt_tokens": 512,
+    "new_tokens": 16,
+    "peak_memory_mb": 679.53
+  },
+  {
+    "model": "state-spaces/mamba-130m-hf",
+    "target_prompt_tokens": 768,
+    "actual_prompt_tokens": 768,
+    "new_tokens": 16,
+    "peak_memory_mb": 764.37
+  },
+  {
+    "model": "state-spaces/mamba-130m-hf",
+    "target_prompt_tokens": 900,
+    "actual_prompt_tokens": 900,
+    "new_tokens": 16,
+    "peak_memory_mb": 808.89
+  },
+  {
+    "model": "gpt2",
+    "target_prompt_tokens": 16,
+    "actual_prompt_tokens": 16,
+    "new_tokens": 16,
+    "peak_memory_mb": 487.35
+  },
+  {
+    "model": "gpt2",
+    "target_prompt_tokens": 32,
+    "actual_prompt_tokens": 32,
+    "new_tokens": 16,
+    "peak_memory_mb": 488.9
+  },
+  {
+    "model": "gpt2",
+    "target_prompt_tokens": 64,
+    "actual_prompt_tokens": 64,
+    "new_tokens": 16,
+    "peak_memory_mb": 493.22
+  },
+  {
+    "model": "gpt2",
+    "target_prompt_tokens": 128,
+    "actual_prompt_tokens": 128,
+    "new_tokens": 16,
+    "peak_memory_mb": 503.84
+  },
+  {
+    "model": "gpt2",
+    "target_prompt_tokens": 256,
+    "actual_prompt_tokens": 256,
+    "new_tokens": 16,
+    "peak_memory_mb": 519.1
+  },
+  {
+    "model": "gpt2",
+    "target_prompt_tokens": 512,
+    "actual_prompt_tokens": 512,
+    "new_tokens": 16,
+    "peak_memory_mb": 562.73
+  },
+  {
+    "model": "gpt2",
+    "target_prompt_tokens": 768,
+    "actual_prompt_tokens": 768,
+    "new_tokens": 16,
+    "peak_memory_mb": 588.12
+  },
+  {
+    "model": "gpt2",
+    "target_prompt_tokens": 900,
+    "actual_prompt_tokens": 900,
+    "new_tokens": 16,
+    "peak_memory_mb": 606.75
+  }
+]

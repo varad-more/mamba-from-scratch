@@ -17,18 +17,56 @@ def load_json(path: Path):
 
 def render_scan_results(path: Path, out_path: Path) -> None:
     rows = load_json(path)
-    names = [row["name"] for row in rows]
-    p50 = [row["latency_ms_p50"] for row in rows]
-    bandwidth = [row["achieved_bandwidth_gb_s"] for row in rows]
 
-    fig, axes = plt.subplots(1, 2, figsize=(10, 4))
-    axes[0].bar(names, p50, color=["#4C78A8", "#F58518", "#54A24B"])
-    axes[0].set_title("Selective scan latency (p50)")
-    axes[0].set_ylabel("Latency (ms)")
+    # Check if multi-shape grid (multiple distinct lengths)
+    lengths = sorted(set(row["length"] for row in rows))
+    backends = sorted(set(row["name"] for row in rows))
+    has_multi = len(lengths) > 1
 
-    axes[1].bar(names, bandwidth, color=["#4C78A8", "#F58518", "#54A24B"])
-    axes[1].set_title("Estimated achieved bandwidth")
-    axes[1].set_ylabel("GB/s")
+    if has_multi:
+        # Group by (name, batch) across lengths — pick batch=1 for the length sweep
+        batch_one = [r for r in rows if r["batch"] == 1]
+        if not batch_one:
+            batch_one = rows
+
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+        colors = {"reference": "#4C78A8", "naive": "#F58518", "fused": "#54A24B"}
+        for name in backends:
+            subset = sorted([r for r in batch_one if r["name"] == name], key=lambda r: r["length"])
+            if not subset:
+                continue
+            ls = [r["length"] for r in subset]
+            p50 = [r["latency_ms_p50"] for r in subset]
+            bw = [r["achieved_bandwidth_gb_s"] for r in subset]
+            c = colors.get(name, "#999999")
+            axes[0].plot(ls, p50, marker="o", label=name, color=c)
+            axes[1].plot(ls, bw, marker="o", label=name, color=c)
+
+        axes[0].set_title("Selective scan latency vs sequence length (B=1)")
+        axes[0].set_xlabel("Sequence length")
+        axes[0].set_ylabel("Latency p50 (ms)")
+        axes[0].set_yscale("log")
+        axes[0].grid(True, alpha=0.3)
+        axes[0].legend()
+
+        axes[1].set_title("Achieved bandwidth vs sequence length (B=1)")
+        axes[1].set_xlabel("Sequence length")
+        axes[1].set_ylabel("GB/s")
+        axes[1].grid(True, alpha=0.3)
+        axes[1].legend()
+    else:
+        names = [row["name"] for row in rows]
+        p50 = [row["latency_ms_p50"] for row in rows]
+        bandwidth = [row["achieved_bandwidth_gb_s"] for row in rows]
+
+        fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+        axes[0].bar(names, p50, color=["#4C78A8", "#F58518", "#54A24B"])
+        axes[0].set_title("Selective scan latency (p50)")
+        axes[0].set_ylabel("Latency (ms)")
+
+        axes[1].bar(names, bandwidth, color=["#4C78A8", "#F58518", "#54A24B"])
+        axes[1].set_title("Estimated achieved bandwidth")
+        axes[1].set_ylabel("GB/s")
 
     fig.tight_layout()
     fig.savefig(out_path, dpi=180)
@@ -77,8 +115,10 @@ def render_memory_scaling(path: Path, out_path: Path) -> None:
     rows = load_json(path)
     grouped: dict[str, tuple[list[float], list[float]]] = {}
     for row in rows:
-        xs, ys = grouped.setdefault(row["model_name"], ([], []))
-        xs.append(row["prompt_tokens"])
+        model_key = row.get("model_name") or row.get("model", "unknown")
+        prompt_key = row.get("prompt_tokens") or row.get("actual_prompt_tokens", 0)
+        xs, ys = grouped.setdefault(model_key, ([], []))
+        xs.append(prompt_key)
         ys.append(row["peak_memory_mb"])
 
     plt.figure(figsize=(6.5, 4.5))
@@ -135,8 +175,13 @@ def render_default_results(figures_dir: Path) -> None:
     gpu_inference = RESULTS / "inference_results.gpu.json"
     if gpu_inference.exists():
         render_inference_results(gpu_inference, figures_dir / "inference_comparison_gpu.png")
-        render_memory_scaling(gpu_inference, figures_dir / "memory_scaling.gpu.png")
         render_throughput_comparison(gpu_inference, figures_dir / "throughput_comparison.gpu.png")
+
+    gpu_memory = RESULTS / "memory_scaling.gpu.json"
+    if gpu_memory.exists():
+        render_memory_scaling(gpu_memory, figures_dir / "memory_scaling.gpu.png")
+    elif gpu_inference.exists():
+        render_memory_scaling(gpu_inference, figures_dir / "memory_scaling.gpu.png")
 
 
 def main() -> None:

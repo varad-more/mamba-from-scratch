@@ -1,10 +1,66 @@
 # Mamba From Scratch
 
-A from-scratch implementation of the core ideas behind **Mamba**: continuous-time state space models, selective scan, parallel scan, Triton kernel scaffolding, parity checks against the official HuggingFace model, and benchmark / profiling utilities.
+A from-scratch implementation of the core ideas behind **Mamba**: continuous-time state space models, selective scan, parallel scan, a fused Triton kernel, parity checks against the official HuggingFace model, and GPU benchmark / profiling analysis.
 
-This repo is meant to be both:
+This repo is both:
 - a **learning artifact** you can read end-to-end, and
 - an **engineering artifact** you can run, test, benchmark, and extend.
+
+---
+
+## What this proves
+
+- Rebuilt selective scan from scratch in PyTorch and validated parity against official `mamba-130m-hf` checkpoints (max error = 0.0 across 5 sampled layers)
+- Built and benchmarked a fused Triton kernel for selective scan, achieving **74-121x speedup** over the PyTorch reference on an A10G GPU
+- Analyzed memory bandwidth utilization and roofline positioning, confirming selective scan is **memory-bound**
+- Compared Mamba and GPT-2 inference behavior on GPU, measuring TTFT, decode throughput, and memory scaling
+
+---
+
+## Key results (NVIDIA A10G)
+
+### Fused Triton kernel performance (B=1, D=768, N=16)
+
+| Seq Length | Reference (ms) | Fused Triton (ms) | Speedup | Bandwidth (GB/s) |
+|------------|---------------:|-------------------:|--------:|------------------:|
+| 128        | 17.79          | 0.240              | 74x     | 5.2               |
+| 256        | 36.04          | 0.381              | 95x     | 6.4               |
+| 512        | 71.06          | 0.668              | 106x    | 7.2               |
+| 1024       | 139.57         | 1.231              | 113x    | 7.8               |
+| 2048       | 283.38         | 2.344              | 121x    | 8.2               |
+
+### Official model parity
+
+| Layers tested | Max absolute error | Mean absolute error |
+|---------------|-------------------:|--------------------:|
+| 0, 5, 11, 17, 23 | **0.0**        | **0.0**             |
+
+### Inference comparison (Mamba-130M vs GPT-2)
+
+| Model | Prompt tokens | TTFT (ms) | Decode (tok/s) | Peak memory (MB) |
+|-------|-------------:|----------:|---------------:|------------------:|
+| Mamba | 24           | 311.6     | 75.8           | 988.5             |
+| GPT-2 | 24           | 43.3      | 159.8          | 983.0             |
+| Mamba | 384          | 702.5     | 52.1           | 1112.8            |
+| GPT-2 | 384          | 10.2      | 137.6          | 1055.8            |
+| Mamba | 768          | 1394.8    | 51.7           | 1240.5            |
+| GPT-2 | 768          | 18.3      | 133.7          | 1082.1            |
+
+> **Note:** HF Mamba uses a pure Python sequential loop (no optimized CUDA kernels), which explains its slower TTFT and throughput. The kernel-level benchmarks above show the real performance of the fused scan path.
+
+### Roofline
+
+![Roofline](figures/roofline.png)
+
+All fused kernel measurements sit left of the ridge point, confirming selective scan is **memory-bound** on A10G.
+
+### Scan benchmark
+
+![Scan benchmark](figures/scan_benchmark_gpu.png)
+
+### Memory scaling
+
+![Memory scaling](figures/memory_scaling.gpu.png)
 
 ---
 
@@ -12,80 +68,11 @@ This repo is meant to be both:
 
 This project walks through the Mamba stack in layers:
 
-1. **SSM math**
-   - zero-order-hold discretization
-   - continuous → discrete recurrence
-2. **Reference implementation**
-   - selective scan in PyTorch
-   - minimal `MambaBlock`
-3. **Algorithmic acceleration**
-   - sequential scan
-   - parallel / chunked affine scan
-   - SSD-style prototype
-4. **Kernel path**
-   - Triton fused selective scan entry point
-   - safe fallback to the PyTorch reference implementation
-5. **System validation**
-   - official model parity checks
-   - scan benchmarks
-   - inference comparison harness
-   - roofline / figure generation
-
----
-
-## Current status
-
-- ✅ Core math + reference modules implemented
-- ✅ Minimal Mamba block implemented in PyTorch
-- ✅ Parallel / chunked scan utilities implemented
-- ✅ Triton fused forward path added
-- ✅ Supports both shared and channel-specific `B/C` layouts in the fused path
-- ✅ Explicit backend capability and selection policy added (`auto` / `reference` / `fused`)
-- ✅ Official parity path working for `state-spaces/mamba-130m-hf`
-- ✅ Benchmarks and result-driven figure generation implemented
-- ✅ Lightweight FastAPI serving layer added for local inference demos
-- ✅ Colab/GPU runbook + one-shot validation runner added
-- ✅ Test suite passing on CPU: **31 passed, 2 skipped**
-
-> This workspace is CPU-only, so the repository code is complete up to the point where **real CUDA execution and hardware benchmarks** are required. GPU-specific performance claims should be generated on Colab or another CUDA machine using the provided runbook.
-
----
-
-## Key validation results
-
-### 1) Official model parity
-
-Saved sample parity runs show exact output match for sampled layers from `state-spaces/mamba-130m-hf`:
-
-- `benchmarks/results/official_parity.layer0.cpu.json`
-- `benchmarks/results/official_parity.sample_layers.cpu.json`
-
-Current sample result:
-- sampled layers: `0, 5, 23`
-- max absolute error: **0.0**
-- mean absolute error: **0.0**
-
-That means the local `MambaBlock` can successfully load official mixer weights and reproduce the corresponding HuggingFace mixer outputs for the sampled layers.
-
-### 2) CPU scan benchmark sample
-
-From `benchmarks/results/scan_results.cpu.json` for a small sample run (`B=1, D=8, N=4, L=64`):
-
-- reference p50 latency: **7.54 ms**
-- naive p50 latency: **7.53 ms**
-- fused path on CPU: **falls back to the reference backend**
-
-These are **sanity / plumbing results**, not final performance claims. Real kernel evaluation should be done on GPU.
-
-### 3) CPU inference sample
-
-From `benchmarks/results/inference_results.cpu.json`:
-
-- CPU comparison is wired up and reproducible across a prompt-length sweep (`8, 16, 32, 64` target tokens)
-- Mamba parity / loading path works
-- TTFT, decode throughput, and peak memory outputs are captured end-to-end
-
-These numbers should be treated as **CPU functional validation**, not the final systems story. The real value of the repo comes from running the GPU validation flow.
+1. **SSM math** — ZOH discretization, continuous-to-discrete recurrence
+2. **Reference implementation** — selective scan in PyTorch, minimal `MambaBlock`
+3. **Algorithmic acceleration** — sequential, parallel (Hillis-Steele), and chunked affine scans
+4. **Kernel path** — fused Triton selective scan with automatic fallback
+5. **System validation** — official model parity, scan benchmarks, inference comparison, roofline analysis
 
 ---
 
@@ -95,51 +82,35 @@ These numbers should be treated as **CPU functional validation**, not the final 
 mamba-from-scratch/
 ├── PROJECT_PLAN.md                 # Full implementation plan
 ├── CONTRACTS.md                    # Shape / dtype / tolerance contracts
-├── COLAB_RUNBOOK.md                # How to run the GPU-dependent parts on Colab
-├── README.md
-├── pyproject.toml
-├── requirements.txt
+├── ARCHITECTURE.md                 # Architecture source of truth
 ├── notebooks/
-│   ├── 01_ssm_basics.ipynb
-│   ├── 02_selective_scan.ipynb
-│   ├── 03_parallel_scan.ipynb
-│   ├── 05_profiling.ipynb
-│   └── 07_inference_comparison.ipynb
+│   ├── 01_ssm_basics.ipynb         # Classical SSMs in NumPy
+│   ├── 02_selective_scan.ipynb     # Selective scan walkthrough
+│   ├── 03_parallel_scan.ipynb      # Parallel scan algorithms
+│   ├── 05_profiling.ipynb          # Roofline and bandwidth analysis
+│   └── 07_inference_comparison.ipynb # Mamba vs GPT-2 on GPU
 ├── src/mamba_minimal/
-│   ├── api.py
-│   ├── discretization.py
-│   ├── selective_scan.py
-│   ├── model.py
-│   ├── parallel_scan.py
-│   ├── ssd.py
-│   └── generate.py
+│   ├── discretization.py           # ZOH discretization
+│   ├── selective_scan.py           # Reference selective scan (truth path)
+│   ├── model.py                    # Readable MambaBlock
+│   ├── parallel_scan.py            # Sequential, Hillis-Steele, chunked scans
+│   ├── ssd.py                      # Mamba-2 SSD prototype
+│   ├── generate.py                 # Text generation wrapper
+│   ├── api.py                      # FastAPI serving layer
+│   └── backend/                    # Capability checks + backend policy
 ├── kernels/
-│   ├── scan_naive.py
-│   ├── scan_fused.py
-│   └── autotune.py
+│   ├── scan_fused.py               # Fused Triton selective scan kernel
+│   ├── scan_naive.py               # Reference-wrapper baseline
+│   └── autotune.py                 # Kernel autotuning utilities
 ├── benchmarks/
-│   ├── benchmark_scan.py
-│   ├── benchmark_inference.py
-│   ├── roofline.py
-│   └── results/
-├── scripts/
-│   ├── create_notebooks.py
-│   ├── make_placeholder_figures.py
-│   ├── official_parity.py
-│   ├── render_benchmark_figures.py
-│   └── run_gpu_validation.py
-├── figures/
-└── tests/
+│   ├── benchmark_scan.py           # Scan backend comparison
+│   ├── benchmark_inference.py      # Mamba vs GPT-2 inference
+│   ├── roofline.py                 # Roofline chart generation
+│   └── results/                    # Saved JSON benchmark artifacts
+├── tests/                          # 33 tests (32 pass, 1 skip)
+├── scripts/                        # Parity, validation, figure rendering
+└── figures/                        # Generated charts
 ```
-
-### Directory guide
-
-- `src/mamba_minimal/` — readable reference implementation
-- `kernels/` — Triton / kernel-facing entry points
-- `tests/` — correctness, parity, and regression coverage
-- `benchmarks/` — reproducible timing / memory scripts
-- `scripts/` — notebook generation, parity, figure rendering, validation runners
-- `figures/` — generated figures used in the README / analysis
 
 ---
 
@@ -179,41 +150,15 @@ pytest -q
 
 ## Core commands
 
-### Run the full local test suite
-
-```bash
-pytest -q
-```
-
-### Run phase-specific checks
-
-```bash
-pytest tests/test_discretization.py tests/test_selective_scan.py -q
-pytest tests/test_parallel_scan.py -q
-pytest tests/test_kernel_parity.py -q
-pytest tests/test_end_to_end.py -q
-```
-
 ### Run the scan benchmark
 
 ```bash
 python benchmarks/benchmark_scan.py \
   --device auto \
-  --batch 2 \
-  --channels 64 \
+  --batch 1 \
+  --channels 768 \
   --state 16 \
-  --length 256
-```
-
-Save output directly to JSON:
-
-```bash
-python benchmarks/benchmark_scan.py \
-  --device auto \
-  --batch 2 \
-  --channels 64 \
-  --state 16 \
-  --length 256 \
+  --length 1024 \
   --output benchmarks/results/scan_results.gpu.json
 ```
 
@@ -222,57 +167,29 @@ python benchmarks/benchmark_scan.py \
 ```bash
 python benchmarks/benchmark_inference.py \
   --device auto \
-  --prompt-lengths 8,32,128,512 \
-  --new-tokens 32
-```
-
-Save output directly to JSON:
-
-```bash
-python benchmarks/benchmark_inference.py \
-  --device auto \
-  --prompt-lengths 8,32,128,512 \
+  --prompt-lengths 8,32,128,256 \
   --new-tokens 32 \
   --output benchmarks/results/inference_results.gpu.json
 ```
 
-### Run official parity against HuggingFace Mamba
-
-Single layer:
+### Run official parity check
 
 ```bash
 python scripts/official_parity.py \
   --model state-spaces/mamba-130m-hf \
-  --layer 0 \
-  --seq-len 8 \
-  --batch 1 \
-  --device auto \
-  --json
-```
-
-Multi-layer sweep:
-
-```bash
-python scripts/official_parity.py \
-  --model state-spaces/mamba-130m-hf \
-  --layer 0,5,23 \
-  --seq-len 4 \
-  --batch 1 \
+  --layer 0,5,11,17,23 \
+  --seq-len 16 \
+  --batch 2 \
   --device auto \
   --json \
   --output benchmarks/results/official_parity.gpu.json
 ```
 
-### Render figures from saved benchmark results
+### Render figures from saved results
 
 ```bash
 python scripts/render_benchmark_figures.py
-```
-
-### Generate notebooks
-
-```bash
-python scripts/create_notebooks.py
+python benchmarks/roofline.py --scan-results benchmarks/results/scan_results.gpu.json
 ```
 
 ### Text generation smoke test
@@ -287,111 +204,10 @@ python -m mamba_minimal.generate \
 
 ### Serve a local generation API
 
-Install the serving extras first:
-
 ```bash
 uv pip install -e .[serve]
-```
-
-Run the API:
-
-```bash
 python -m mamba_minimal.api --host 0.0.0.0 --port 8000
 ```
-
-Example request:
-
-```bash
-curl -X POST http://127.0.0.1:8000/generate \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "prompt": "Mamba is useful because",
-    "model_name": "state-spaces/mamba-130m-hf",
-    "device": "auto",
-    "max_new_tokens": 32,
-    "do_sample": false,
-    "temperature": 1.0
-  }'
-```
-
-Health check:
-
-```bash
-curl http://127.0.0.1:8000/healthz
-```
-
----
-
-## GPU / Colab execution
-
-The remaining hardware-dependent part of the project is already wired up.
-
-If you want to run the real CUDA validation flow on Google Colab, use:
-- `COLAB_RUNBOOK.md` for setup instructions
-- `notebooks/08_colab_gpu_validation.ipynb` for a Colab-style notebook flow
-- `scripts/colab_gpu_validation.py` for a plain Python bootstrap you can run directly in Colab after cloning
-- `scripts/run_gpu_validation.py` for one-shot execution
-
-### One-command Colab / GPU validation
-
-```bash
-python scripts/run_gpu_validation.py --device auto --parity-layers 0,5,23
-```
-
-This generates:
-- `benchmarks/results/scan_results.gpu.json`
-- `benchmarks/results/official_parity.gpu.json`
-- `benchmarks/results/inference_results.gpu.json`
-- GPU figure outputs in `figures/`
-
-If you want explicit model control:
-
-```bash
-python scripts/run_gpu_validation.py \
-  --device auto \
-  --mamba-model state-spaces/mamba-130m-hf \
-  --baseline-model gpt2 \
-  --parity-model state-spaces/mamba-130m-hf \
-  --parity-layers 0,5,23
-```
-
----
-
-## Triton fused path: current support boundary
-
-The current fused Triton kernel supports:
-
-- `u`, `delta`: `(B, D, L)`
-- `A`: `(D, N)`
-- shared `B`, `C`: `(B, N, L)`
-- channel-specific `B`, `C`: `(B, D, N, L)`
-- optional `D_skip`: `(D,)`
-- optional gate `z`: `(B, D, L)`
-
-If inputs fall outside this boundary, execution automatically falls back to the PyTorch reference implementation.
-
-This is intentional: **correctness first, broader kernel coverage second**.
-
----
-
-## Figures
-
-Generated figure assets live in `figures/`:
-
-- `architecture.png`
-- `roofline.png`
-- `scan_benchmark_cpu.png`
-- `inference_comparison_cpu.png`
-- `memory_scaling.png`
-- `throughput_comparison.png`
-- `scan_benchmark_gpu.png` *(generated after GPU validation)*
-- `inference_comparison_gpu.png` *(generated after GPU validation)*
-- `memory_scaling.gpu.png` *(generated after GPU validation)*
-- `throughput_comparison.gpu.png` *(generated after GPU validation)*
-
-Important note:
-- CPU figures are generated from saved benchmark results
-- GPU-specific figures should still be regenerated from real CUDA runs before making hardware claims
 
 ---
 
@@ -399,34 +215,71 @@ Important note:
 
 This repository follows a strict validation ladder:
 
-1. math-level recurrence checks
-2. selective operator parity checks
-3. block-level forward checks
-4. kernel-wrapper parity checks
-5. official-model parity checks
-6. end-to-end behavior checks
+1. Math-level recurrence checks (NumPy notebook)
+2. Selective scan operator parity (synthetic tensors)
+3. Block-level forward checks (MambaBlock shapes and gradients)
+4. Kernel-wrapper parity (fused vs reference across shape/dtype matrix)
+5. Official model parity (load HF weights, compare layer outputs)
+6. End-to-end behavior checks (generation, benchmarks)
 
-Performance claims should only be made after the correctness path is green.
+Performance claims are only made after the correctness path is green.
+
+---
+
+## Triton fused kernel: support boundary
+
+The fused Triton kernel supports:
+
+- `u`, `delta`: `(B, D, L)`
+- `A`: `(D, N)`
+- shared `B`, `C`: `(B, N, L)`
+- channel-specific `B`, `C`: `(B, D, N, L)`
+- optional `D_skip`: `(D,)`, optional gate `z`: `(B, D, L)`
+
+Unsupported shapes or CPU environments automatically fall back to the PyTorch reference. This is intentional: **correctness first, broader kernel coverage second**.
 
 ---
 
 ## Known limitations
 
-- This workspace is CPU-only, so true Triton CUDA execution cannot be benchmarked here.
-- The fused Triton path is implemented, but final performance claims still require GPU runs.
-- The unfused `scan_naive.py` path is an honest reference-wrapper baseline, not a production Triton kernel.
-- Official parity currently focuses on mixer-level validation rather than the full end-to-end pretrained model stack.
-- Inference benchmarks depend on model downloads and network availability.
+- The unfused `scan_naive.py` is an honest reference-wrapper baseline, not a real decomposed Triton kernel
+- Official parity is mixer-level, not full end-to-end model parity
+- HF Mamba inference uses a Python sequential loop; production-grade benchmarks would use the `mamba-ssm` CUDA package
+- GPT-2's 1024-token position limit prevents testing at the long contexts where Mamba's O(1) state advantage is most visible
+- Inference benchmarks depend on model downloads and network availability
 
 ---
 
-## Next steps
+## Architecture overview
 
-- run the full GPU validation flow on Colab or another CUDA machine
-- regenerate GPU figures from measured CUDA benchmark runs
-- extend parity from sampled layers to broader model sweeps
-- tighten the final README results section with real T4 / A100 measurements
-- optionally add a lightweight serving demo
+```text
+Input hidden states
+        |
+src/mamba_minimal/model.py       (MambaBlock wiring)
+        |
+src/mamba_minimal/selective_scan.py  (reference scan)
+        |
+src/mamba_minimal/backend/*      (capability + policy)
+        |
+kernels/scan_fused.py            (Triton fused path)
+        |
+tests/ + scripts/ + benchmarks/  (validation + profiling)
+```
+
+For the full architecture map, see [`ARCHITECTURE.md`](ARCHITECTURE.md).
+
+### Module map
+
+| Area | File(s) | Responsibility |
+|---|---|---|
+| Discretization | `src/mamba_minimal/discretization.py` | ZOH discretization and inverse softplus |
+| Reference scan | `src/mamba_minimal/selective_scan.py` | Truth-path selective recurrence |
+| Mamba block | `src/mamba_minimal/model.py` | Readable block wiring and backend dispatch |
+| Parallel scan | `src/mamba_minimal/parallel_scan.py` | Sequential, Hillis-Steele, and chunked scans |
+| SSD prototype | `src/mamba_minimal/ssd.py` | Minimal chunked SSD-style scan view |
+| Fused kernel | `kernels/scan_fused.py` | Triton fused selective scan |
+| Backend policy | `src/mamba_minimal/backend/` | Capability checks and `auto`/`reference`/`fused` selection |
+| Serving | `src/mamba_minimal/api.py` | FastAPI app for local demos |
 
 ---
 
@@ -436,60 +289,9 @@ Performance claims should only be made after the correctness path is green.
 - Official Mamba repo: https://github.com/state-spaces/mamba
 - Annotated Mamba (Hard Way): https://srush.github.io/annotated-mamba/hard.html
 - Mamba-2 algorithm notes: https://tridao.me/blog/2024/mamba2-part3-algorithm/
+- HuggingFace model: https://huggingface.co/state-spaces/mamba-130m-hf
 
 ---
-
-## Architecture Overview
-
-If you want the short version of how this repo is structured, use this mental model:
-
-```text
-Input hidden states
-        ↓
-src/mamba_minimal/model.py
-(MambaBlock wiring)
-        ↓
-src/mamba_minimal/selective_scan.py
-(reference selective scan)
-        ↓
-src/mamba_minimal/backend/*
-(capability checks + backend policy)
-        ↓
-kernels/scan_fused.py
-(optional Triton fused path)
-        ↓
-tests/ + scripts/ + benchmarks/
-```
-
-For the deeper architecture map and refactor plan, see [`ARCHITECTURE.md`](ARCHITECTURE.md).
-
-### Module map
-
-| Area | File(s) | Responsibility |
-|---|---|---|
-| Discretization / SSM math | `src/mamba_minimal/discretization.py` | ZOH discretization helpers and stable inverse softplus |
-| Reference selective scan | `src/mamba_minimal/selective_scan.py` | Truth-path selective recurrence implementation |
-| Core Mamba block | `src/mamba_minimal/model.py` | Readable Mamba block wiring and backend dispatch |
-| Serving API | `src/mamba_minimal/api.py` | Lightweight FastAPI app for local inference demos |
-| Backend policy | `src/mamba_minimal/backend/` | Capability checks and explicit `auto` / `reference` / `fused` selection |
-| Parallel scan utilities | `src/mamba_minimal/parallel_scan.py` | Sequential, Hillis-Steele, and chunked affine scans |
-| SSD prototype | `src/mamba_minimal/ssd.py` | Minimal chunked SSD-style scan view |
-| Kernel entrypoints | `kernels/scan_naive.py`, `kernels/scan_fused.py` | Unfused baseline wrapper and fused Triton implementation |
-| Validation entrypoint | `scripts/run_gpu_validation.py` | Runs parity, scan benchmarks, inference benchmarks, and figure generation |
-| Tests | `tests/` | Correctness, parity, and regression coverage |
-
-### How to read the codebase
-
-| Reading order | Why |
-|---|---|
-| `README.md` | Understand project goals and usage |
-| `ARCHITECTURE.md` | Get the current layer boundaries |
-| `src/mamba_minimal/model.py` | See how the Mamba block is assembled |
-| `src/mamba_minimal/selective_scan.py` | Understand the truth-path recurrence |
-| `src/mamba_minimal/backend/` | Understand backend eligibility and policy |
-| `kernels/scan_fused.py` | See the fused Triton path |
-| `scripts/run_gpu_validation.py` | See how correctness and benchmark flows are executed |
-
 
 ## License
 
