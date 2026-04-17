@@ -98,8 +98,9 @@ def bench_ours(
     t_total = time.perf_counter() - t0
     t_decode = t_total - t_prefill
 
+    impl_label = "mamba_minimal.parallel+triton" if model.use_triton else "mamba_minimal.parallel"
     return RunResult(
-        impl="mamba_minimal.parallel",
+        impl=impl_label,
         device=str(device),
         dtype=str(model.embeddings.weight.dtype).replace("torch.", ""),
         prompt_tokens=int(prompt_ids.shape[-1]),
@@ -183,6 +184,8 @@ def main() -> None:
     p.add_argument("--prompt-tokens", type=int, default=8,
                    help="If >0, override the prompt to a random sequence of this length.")
     p.add_argument("--new-tokens", type=int, default=128)
+    p.add_argument("--use-triton", action="store_true",
+                   help="Route our .step() decode path through the Triton kernel.")
     p.add_argument("--output", type=str, default=None)
     args = p.parse_args()
 
@@ -208,8 +211,11 @@ def main() -> None:
           f"New tokens: {args.new_tokens}")
 
     hf_model = AutoModelForCausalLM.from_pretrained(args.model).to(device=device, dtype=dtype).eval()
-    ours = MambaModel.from_pretrained(args.model, scan_impl="parallel",
-                                      device=device, dtype=dtype).eval()
+    ours = MambaModel.from_pretrained(
+        args.model, scan_impl="parallel",
+        use_triton=args.use_triton,
+        device=device, dtype=dtype,
+    ).eval()
 
     results: list[RunResult] = []
     print("\n-- Ours (parallel scan, state-carrying decode) --")

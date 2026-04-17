@@ -21,6 +21,15 @@ try:
 except Exception:
     _FUSED_AVAILABLE = False
 
+try:
+    from kernels.scan_decode import (
+        TRITON_AVAILABLE as _DECODE_TRITON_AVAILABLE,
+        selective_scan_decode_triton,
+    )
+except Exception:
+    _DECODE_TRITON_AVAILABLE = False
+    selective_scan_decode_triton = None  # type: ignore
+
 
 @dataclass(slots=True)
 class MambaBlockConfig:
@@ -335,6 +344,7 @@ class MambaBlock(nn.Module):
         hidden_state_t: Tensor,
         conv_state: Tensor,
         ssm_state: Tensor,
+        use_triton: bool = False,
     ) -> tuple[Tensor, Tensor, Tensor]:
         """Advance one token. ``hidden_state_t`` is ``(B, d_model)`` or ``(B, 1, d_model)``.
 
@@ -342,6 +352,11 @@ class MambaBlock(nn.Module):
         ``output_t`` shape ``(B, d_model)``. This is the ``O(1)``-per-step
         decode path; the SSM state and conv buffer are the full "KV-cache
         equivalent" — nothing else needs to be remembered.
+
+        If ``use_triton=True`` and the Triton decode kernel is available on
+        the current device, the SSM recurrence + C projection + D skip +
+        gate are run through :func:`kernels.scan_decode.selective_scan_decode_triton`.
+        Otherwise the pure-PyTorch path is used (bit-exact fallback).
         """
 
         if hidden_state_t.ndim == 2:
@@ -375,19 +390,39 @@ class MambaBlock(nn.Module):
         )
         dt = F.softplus(self.dt_proj(dt))  # (B, d_inner)
 
-        # Discretize for a single timestep.
         A = -torch.exp(self.A_log.float())  # (d_inner, d_state)
-        dt_f = dt.float()
-        delta_A = torch.exp(dt_f.unsqueeze(-1) * A.unsqueeze(0))  # (B, d_inner, d_state)
-        delta_B_u = (
-            dt_f.unsqueeze(-1) * B_vec.float().unsqueeze(1) * x_conv_t.float().unsqueeze(-1)
-        )  # (B, d_inner, d_state)
 
-        new_ssm_state = delta_A * ssm_state + delta_B_u  # fp32
-        y_t = (new_ssm_state * C_vec.float().unsqueeze(1)).sum(dim=-1)  # (B, d_inner)
-        y_t = y_t + self.D.float() * x_conv_t.float()
-        y_t = y_t * F.silu(z.float())
-        y_t = y_t.to(dtype=x.dtype)
+        # Dispatch: Triton decode kernel when asked and available on GPU.
+        can_triton = (
+            use_triton
+            and _DECODE_TRITON_AVAILABLE
+            and x_conv_t.is_cuda
+            and selective_scan_decode_triton is not None
+        )
+        if can_triton:
+            y_t, new_ssm_state = selective_scan_decode_triton(
+                x=x_conv_t,
+                dt=dt,
+                A=A,
+                B=B_vec,
+                C=C_vec,
+                ssm_state=ssm_state,
+                D_skip=self.D.float(),
+                z=z,
+            )
+        else:
+            dt_f = dt.float()
+            delta_A = torch.exp(dt_f.unsqueeze(-1) * A.unsqueeze(0))
+            delta_B_u = (
+                dt_f.unsqueeze(-1)
+                * B_vec.float().unsqueeze(1)
+                * x_conv_t.float().unsqueeze(-1)
+            )
+            new_ssm_state = delta_A * ssm_state + delta_B_u
+            y_t = (new_ssm_state * C_vec.float().unsqueeze(1)).sum(dim=-1)
+            y_t = y_t + self.D.float() * x_conv_t.float()
+            y_t = y_t * F.silu(z.float())
+            y_t = y_t.to(dtype=x.dtype)
 
         out_t = self.out_proj(y_t)  # (B, d_model)
         return out_t, new_conv_state, new_ssm_state
@@ -458,10 +493,13 @@ class MambaResidualBlock(nn.Module):
         hidden_state_t: Tensor,
         conv_state: Tensor,
         ssm_state: Tensor,
+        use_triton: bool = False,
     ) -> tuple[Tensor, Tensor, Tensor]:
         residual = hidden_state_t.squeeze(1) if hidden_state_t.ndim == 3 else hidden_state_t
         normed = self.norm(residual)
-        out_t, conv_state, ssm_state = self.mixer.step(normed, conv_state, ssm_state)
+        out_t, conv_state, ssm_state = self.mixer.step(
+            normed, conv_state, ssm_state, use_triton=use_triton,
+        )
         return residual + out_t, conv_state, ssm_state
 
 
@@ -510,10 +548,16 @@ class MambaModel(nn.Module):
     between ``"parallel"`` and ``"naive"``).
     """
 
-    def __init__(self, config: MambaModelConfig, scan_impl: str = "parallel") -> None:
+    def __init__(
+        self,
+        config: MambaModelConfig,
+        scan_impl: str = "parallel",
+        use_triton: bool = False,
+    ) -> None:
         super().__init__()
         self.config = config
         self.scan_impl = scan_impl
+        self.use_triton = use_triton
         self.embeddings = nn.Embedding(config.vocab_size, config.d_model)
         self.layers = nn.ModuleList(
             [
@@ -575,18 +619,23 @@ class MambaModel(nn.Module):
         return logits
 
     def step(
-        self, token_ids: Tensor, state: list[tuple[Tensor, Tensor]]
+        self,
+        token_ids: Tensor,
+        state: list[tuple[Tensor, Tensor]],
+        use_triton: bool | None = None,
     ) -> tuple[Tensor, list[tuple[Tensor, Tensor]]]:
         """Advance one token per batch element. ``token_ids`` shape ``(B,)``.
 
         Returns ``(logits, new_state)`` where ``logits`` shape is ``(B, vocab)``.
+        ``use_triton`` overrides the model-level default (``self.use_triton``).
         """
 
+        ut = self.use_triton if use_triton is None else use_triton
         h = self.embeddings(token_ids)  # (B, d_model)
         new_state: list[tuple[Tensor, Tensor]] = []
         for i, layer in enumerate(self.layers):
             conv_s, ssm_s = state[i]
-            h, conv_s, ssm_s = layer.step(h, conv_s, ssm_s)
+            h, conv_s, ssm_s = layer.step(h, conv_s, ssm_s, use_triton=ut)
             new_state.append((conv_s, ssm_s))
         h = self.norm_f(h)
         logits = self.lm_head(h)
@@ -661,6 +710,7 @@ class MambaModel(nn.Module):
         cls,
         model_name: str = "state-spaces/mamba-130m-hf",
         scan_impl: str = "parallel",
+        use_triton: bool = False,
         device: torch.device | str = "cpu",
         dtype: torch.dtype = torch.float32,
     ) -> "MambaModel":
@@ -670,7 +720,7 @@ class MambaModel(nn.Module):
 
         ckpt = load_mamba_hf_checkpoint(model_name)
         config = MambaModelConfig.from_hf_config(ckpt.config)
-        model = cls(config, scan_impl=scan_impl)
+        model = cls(config, scan_impl=scan_impl, use_triton=use_triton)
         model.load_hf_state_dict(ckpt.state_dict)
         model = model.to(device=device, dtype=dtype)
         model.eval()

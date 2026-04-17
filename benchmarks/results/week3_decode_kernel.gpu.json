@@ -1,0 +1,96 @@
+{
+  "iters": 1000,
+  "rows": [
+    {
+      "shape": "B=1, D=1536, N=16",
+      "batch": 1,
+      "d_inner": 1536,
+      "d_state": 16,
+      "dtype": "float32",
+      "triton_us": 60.51020812988281,
+      "pytorch_us": 153.6143341064453,
+      "speedup": 2.5386515573821544,
+      "triton_gbps": 8.732146464706323,
+      "pytorch_gbps": 3.43967900569658,
+      "pct_peak_600gbps": 1.4553577441177206
+    },
+    {
+      "shape": "B=4, D=1536, N=16",
+      "batch": 4,
+      "d_inner": 1536,
+      "d_state": 16,
+      "dtype": "float32",
+      "triton_us": 59.575294494628906,
+      "pytorch_us": 138.5482177734375,
+      "speedup": 2.325598537929653,
+      "triton_gbps": 35.476719299986826,
+      "pytorch_gbps": 15.254876850571858,
+      "pct_peak_600gbps": 5.912786549997804
+    },
+    {
+      "shape": "B=8, D=1536, N=16",
+      "batch": 8,
+      "d_inner": 1536,
+      "d_state": 16,
+      "dtype": "float32",
+      "triton_us": 58.398719787597656,
+      "pytorch_us": 152.29132080078125,
+      "speedup": 2.607785262325629,
+      "triton_gbps": 72.38295660203357,
+      "pytorch_gbps": 27.756486566490636,
+      "pct_peak_600gbps": 12.063826100338929
+    },
+    {
+      "shape": "B=1, D=1536, N=16",
+      "batch": 1,
+      "d_inner": 1536,
+      "d_state": 16,
+      "dtype": "float16",
+      "triton_us": 75.3070068359375,
+      "pytorch_us": 201.48739624023438,
+      "speedup": 2.675546469124596,
+      "triton_gbps": 7.016398900983118,
+      "pytorch_gbps": 2.6224171330796557,
+      "pct_peak_600gbps": 1.1693998168305197
+    },
+    {
+      "shape": "B=1, D=1536, N=16",
+      "batch": 1,
+      "d_inner": 1536,
+      "d_state": 16,
+      "dtype": "bfloat16",
+      "triton_us": 76.30438232421875,
+      "pytorch_us": 209.75103759765625,
+      "speedup": 2.7488727542072247,
+      "triton_gbps": 6.924687467554438,
+      "pytorch_gbps": 2.519100768471737,
+      "pct_peak_600gbps": 1.1541145779257398
+    },
+    {
+      "shape": "B=1, D=3072, N=16",
+      "batch": 1,
+      "d_inner": 3072,
+      "d_state": 16,
+      "dtype": "float32",
+      "triton_us": 61.473793029785156,
+      "pytorch_us": 145.9087371826172,
+      "speedup": 2.373511214964754,
+      "triton_gbps": 17.190544912170573,
+      "pytorch_gbps": 7.242664287316565,
+      "pct_peak_600gbps": 2.865090818695095
+    },
+    {
+      "shape": "B=1, D=1536, N=64",
+      "batch": 1,
+      "d_inner": 1536,
+      "d_state": 64,
+      "dtype": "float32",
+      "triton_us": 58.254337310791016,
+      "pytorch_us": 140.01356506347656,
+      "speedup": 2.403487388698532,
+      "triton_gbps": 34.38274457254834,
+      "pytorch_gbps": 14.305356763767461,
+      "pct_peak_600gbps": 5.730457428758057
+    }
+  ]
+}
