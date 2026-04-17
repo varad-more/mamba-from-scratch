@@ -121,7 +121,7 @@ class Mamba2Block(nn.Module):
         )
         if return_state:
             y, ssm_state = y
-        y = rearrange(y, "b l h p -> b l (h p)")
+        y = rearrange(y, "b l h p -> b l (h p)").to(u.dtype)
         y = _gated_rms_norm(y, z, self.norm_weight, cfg.rms_norm_eps)
         out = self.out_proj(y)
         if return_state:
