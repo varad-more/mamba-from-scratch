@@ -725,3 +725,27 @@ class MambaModel(nn.Module):
         model = model.to(device=device, dtype=dtype)
         model.eval()
         return model
+
+
+def load_model(
+    model_name: str,
+    *,
+    arch: str = "auto",
+    device: torch.device | str = "cuda",
+    dtype: torch.dtype = torch.float32,
+    **kwargs,
+):
+    """Architecture-agnostic loader — returns a Mamba-1 ``MambaModel`` or a
+    Mamba-2 ``Mamba2Model`` based on ``arch`` (or the checkpoint name).
+
+    Both returned objects expose ``forward(ids)``, ``forward(ids, return_state=True)``,
+    ``step(token, state)`` and ``empty_state(batch, device)``.
+    """
+    if arch == "auto":
+        arch = "mamba2" if "mamba2" in model_name.lower() else "mamba1"
+    if arch == "mamba2":
+        from .block_mamba2 import Mamba2Model
+        return Mamba2Model.from_pretrained(model_name, device=device, dtype=dtype)
+    if arch == "mamba1":
+        return MambaModel.from_pretrained(model_name, device=device, dtype=dtype, **kwargs)
+    raise ValueError(f"unknown arch {arch!r}")

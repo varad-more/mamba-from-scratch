@@ -1,0 +1,52 @@
+{
+  "config": {
+    "device": "cuda",
+    "dtype": "float32",
+    "prompt_tokens": 128,
+    "new_tokens": 64,
+    "use_triton": false,
+    "output": "benchmarks/results/week4.gpu.json"
+  },
+  "results": [
+    {
+      "impl": "minimamba",
+      "arch": "mamba1",
+      "prompt_tokens": 128,
+      "new_tokens": 64,
+      "prefill_ms": 120.1300280004034,
+      "decode_ms": 858.675726999536,
+      "decode_tok_per_s": 74.533375042095,
+      "peak_mb": 1204.18896484375
+    },
+    {
+      "impl": "minimamba",
+      "arch": "mamba2",
+      "prompt_tokens": 128,
+      "new_tokens": 64,
+      "prefill_ms": 43.888524000067264,
+      "decode_ms": 983.5198239998135,
+      "decode_tok_per_s": 65.07240468191328,
+      "peak_mb": 641.82861328125
+    },
+    {
+      "impl": "hf_mamba",
+      "arch": "mamba1",
+      "prompt_tokens": 128,
+      "new_tokens": 64,
+      "prefill_ms": 19.946099999742728,
+      "decode_ms": 979.1859420001856,
+      "decode_tok_per_s": 65.3604154786649,
+      "peak_mb": 581.34521484375
+    },
+    {
+      "impl": "mamba_ssm_ref",
+      "arch": "mamba2",
+      "prompt_tokens": 128,
+      "new_tokens": 64,
+      "prefill_ms": 25.534736999816232,
+      "decode_ms": 900.244572000247,
+      "decode_tok_per_s": 71.09179215354652,
+      "peak_mb": 1051.513671875
+    }
+  ]
+}
