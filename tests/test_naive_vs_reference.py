@@ -1,6 +1,6 @@
 """Naive selective scan vs the ``mamba_ssm`` oracle.
 
-This is the plan's week-1 correctness anchor: our naive scan must match the
+The naive-scan correctness anchor: our naive scan must match the
 authoritative reference from the ``mamba_ssm`` package. The CPU-only variant
 (``selective_scan_ref`` from mamba_ssm) runs everywhere; the CUDA-fused
 ``selective_scan_fn`` runs only when a GPU is available and is marked

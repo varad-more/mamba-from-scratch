@@ -1,4 +1,4 @@
-"""Week 3 microbenchmark: Triton decode kernel vs pure-PyTorch equivalent.
+"""Decode-kernel microbenchmark: Triton decode kernel vs pure-PyTorch equivalent.
 
 End-to-end decode tok/s is bounded by the four ``nn.Linear`` calls in the
 mixer (``in_proj``, ``x_proj``, ``dt_proj``, ``out_proj``) + Python-level
@@ -153,7 +153,7 @@ def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--iters", type=int, default=1000)
     p.add_argument("--output", type=str,
-                   default="benchmarks/results/week3_decode_kernel.gpu.json")
+                   default="benchmarks/results/decode_kernel.gpu.json")
     args = p.parse_args()
 
     shapes = [

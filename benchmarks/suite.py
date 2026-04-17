@@ -1,4 +1,4 @@
-"""Week-5 benchmark suite — cross-engine inference harness.
+"""Cross-engine benchmark suite — inference harness.
 
 Engines under test:
   * ``minimamba-mamba1``   — our Mamba-1 via parallel scan (+ Triton decode)

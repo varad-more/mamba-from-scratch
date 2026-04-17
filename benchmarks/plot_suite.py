@@ -1,4 +1,4 @@
-"""Render the Week-5 benchmark plots from suite CSV output.
+"""Render the benchmark-suite plots from suite CSV output.
 
 Produces:
   * ``tokps_bar.png``          — bar chart of decode tok/s at B=1, prompt=1024

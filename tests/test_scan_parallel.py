@@ -1,6 +1,6 @@
 """Parity tests for the Blelloch parallel selective scan.
 
-The naive scan (``scan_naive.selective_scan_naive``) is the Phase-1 oracle.
+The naive scan (``scan_naive.selective_scan_naive``) is the reference oracle.
 This module locks the parallel scan to it within fp32 roundoff, across a
 mix of shapes, gate/skip/softplus variants, and dtypes.
 """

@@ -1,10 +1,10 @@
-"""Generate the two Phase-1 notebooks.
+"""Generate the two reference-parity notebooks.
 
 Run once to (re-)create:
   - notebooks/01_selective_scan_derivation.ipynb
   - notebooks/02_mamba130m_naive_generate.ipynb
 
-Run via ``conda run -n minimamba python scripts/make_phase1_notebooks.py``.
+Run via ``conda run -n minimamba python scripts/make_reference_notebooks.py``.
 """
 
 from __future__ import annotations
@@ -287,8 +287,8 @@ def build_generate_notebook() -> nbf.NotebookNode:
             "Generation from Mamba-130m with our naive scan matches the unpatched "
             "HuggingFace reference token-for-token. Combined with the primitive-level "
             "`mamba_ssm` parity from notebook 01 and `tests/test_naive_vs_reference.py`, "
-            "this closes Phase 1: the naive path is a verified oracle-compatible reference.\n\n"
-            "**Next (Phase 2):** build a standalone `MambaModel` (embedding → N × block → RMSNorm → "
+            "the naive path is a verified oracle-compatible reference.\n\n"
+            "**Next:** build a standalone `MambaModel` (embedding → N × block → RMSNorm → "
             "LM head) + a custom `generate()` that carries the SSM state, so we no longer "
             "need to ride HF's scaffolding for generation."
         ),

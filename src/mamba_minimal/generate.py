@@ -21,7 +21,7 @@ DEFAULT_MODEL_NAME = "state-spaces/mamba-130m-hf"
 
 
 # ----------------------------------------------------------------------
-# State-carrying generate on our own MambaModel (Phase 2)
+# State-carrying generate on our own MambaModel
 # ----------------------------------------------------------------------
 
 

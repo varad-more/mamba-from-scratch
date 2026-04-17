@@ -1,12 +1,12 @@
-# Week 5 — cross-engine benchmark suite
+# Cross-engine benchmark suite
 
 Hardware: **NVIDIA A10G (24 GB)**, dtype **fp16**, CUDA 12.1, PyTorch 2.4,
 mamba_ssm 2.2.2.
 
 ## Harness — `benchmarks/suite.py`
 
-Patterns mirror this repo's earlier microbenches (`week3_decode_kernel.py`,
-`week2.py`): CUDA-event timing, one warmup + median-of-N (default N=3),
+Patterns mirror this repo's earlier microbenches (`decode_kernel.py`,
+`parallel_scan.py`): CUDA-event timing, one warmup + median-of-N (default N=3),
 per-config try/except for OOMs so the matrix doesn't die on one big
 model. Runner registry dispatches across:
 
@@ -50,7 +50,7 @@ Mamba's step (in_proj + conv + SSM + gated-norm + out_proj) for the
 same param class. Our Mamba-1 and Mamba-2 trail the `mamba_ssm`
 Triton-fused decoder by ~10–20% — the gap is Python-level dispatch
 overhead + un-fused norm/conv, **not** the SSM math. Confirmed in
-Week 3 microbench: replacing only the SSM step with Triton moves decode
+decode-kernel microbench: replacing only the SSM step with Triton moves decode
 tok/s by ~1%.
 
 ### Prefill latency vs prompt length — the "linear vs quadratic" plot
@@ -150,7 +150,7 @@ without `mamba_ssm`-style fused chunking.
 
 ### Triton decode kernel — honest MBU recap
 
-From Week-3 microbench (`benchmarks/results/week3_decode_kernel.gpu.json`):
+From the decode-kernel microbench (`benchmarks/results/decode_kernel.gpu.json`):
 
 - **2.3–2.7×** speedup over pure-PyTorch equivalent for the isolated
   SSM step.

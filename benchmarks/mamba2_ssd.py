@@ -1,4 +1,4 @@
-"""Week 4 benchmark — Mamba-1 vs Mamba-2, ours vs ``mamba_ssm``.
+"""Mamba-2 SSD benchmark — Mamba-1 vs Mamba-2, ours vs ``mamba_ssm``.
 
 Four configurations, same prompt, same ``new_tokens``:
 
@@ -148,7 +148,7 @@ def main() -> None:
     p.add_argument("--prompt-tokens", type=int, default=128)
     p.add_argument("--new-tokens", type=int, default=64)
     p.add_argument("--use-triton", action="store_true", help="Route our Mamba-1 .step() through Triton.")
-    p.add_argument("--output", default="benchmarks/results/week4.gpu.json")
+    p.add_argument("--output", default="benchmarks/results/mamba2_ssd.gpu.json")
     args = p.parse_args()
 
     device = torch.device(args.device)

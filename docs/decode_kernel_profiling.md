@@ -1,4 +1,4 @@
-# Week 3 — Triton decode kernel + MBU analysis
+# Triton decode kernel + MBU analysis
 
 ## Goal
 
@@ -47,15 +47,15 @@ and keeps the API purely functional.
 
 - fp32: `atol=rtol=1e-5` across five shapes × {with/without D} × {with/without z}.
 - fp16 / bf16 at Mamba-130m shape: `atol=rtol=5e-3` / `8e-3`.
-- Parity vs `selective_scan_naive` at L=1 (the Phase-1 oracle, which is
-  bit-exact vs `mamba_ssm.selective_scan_ref`).
+- Parity vs `selective_scan_naive` at L=1 (the reference-parity oracle,
+  which is bit-exact vs `mamba_ssm.selective_scan_ref`).
 
 End-to-end: `generate_native(model, ...)` with `use_triton=True` is
 token-exact vs the pure-PyTorch path and vs HF `Mamba-130m`.
 
 ## Microbench — kernel-in-isolation
 
-`benchmarks/week3_decode_kernel.py`, 1000 iters, CUDA events, A10G.
+`benchmarks/decode_kernel.py`, 1000 iters, CUDA events, A10G.
 
 Bytes-moved model per step (per program):
 - Vector loads/stores (A row, B, C, h_old, h_new) = 5 * N fp32
@@ -86,7 +86,7 @@ Takeaways:
    sub-microsecond transfer at peak bandwidth; everything else is
    overhead.
 
-## End-to-end (Week 2 benchmark with `--use-triton`)
+## End-to-end (parallel-scan benchmark with `--use-triton`)
 
 Running `generate_native` on Mamba-130m, 8-token prompt, 128 new tokens:
 
@@ -99,7 +99,7 @@ is dominated by the four `nn.Linear` calls per step (`in_proj`, `x_proj`,
 recurrence — the only part we replaced — is a small fraction of the step.
 This is exactly the headroom a production decode path would claim next
 by CUDA-graphing the step or fusing all four Linears + SSM into a single
-decode kernel. That's out of scope for this week.
+decode kernel. That's out of scope here.
 
 ## nsight-compute note
 
@@ -110,7 +110,7 @@ on a box that has `ncu`:
 
 ```
 ncu --set full --kernel-name _selective_scan_decode_kernel \
-    --launch-count 1 python benchmarks/week3_decode_kernel.py
+    --launch-count 1 python benchmarks/decode_kernel.py
 ```
 
 Expected counters to inspect: `dram__bytes.sum` (DRAM traffic),
@@ -119,15 +119,14 @@ Expected counters to inspect: `dram__bytes.sum` (DRAM traffic),
 
 ## Prefill path
 
-No new Week-3 prefill kernel. The existing Triton fused chunked scan at
+No new prefill kernel here. The existing Triton fused chunked scan at
 `kernels/scan_fused.py` covers prefill; when unavailable the block falls
-back to the pure-PyTorch Blelloch scan (`selective_scan_parallel`). Per
-the Phase 3 spec this fallback is allowed.
+back to the pure-PyTorch Blelloch scan (`selective_scan_parallel`).
 
 ## Verdict
 
 - Correctness: bit-exact at fp32, tight at fp16 / bf16, parity vs the
-  Phase-1 reference and HF generation preserved.
+  naive reference and HF generation preserved.
 - Kernel speedup in isolation: 2.3–2.7× over PyTorch equivalent.
 - MBU: 1.5% at B=1, 12% at B=8 — bound by launch latency, not
   bandwidth, at Mamba-130m decode shapes on A10G.

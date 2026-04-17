@@ -1,4 +1,4 @@
-"""Week 2 benchmark: our MambaModel (parallel scan) vs HuggingFace Mamba.
+"""Parallel-scan benchmark: our MambaModel vs HuggingFace Mamba.
 
 Runs both implementations on ``state-spaces/mamba-130m-hf`` and measures:
 
@@ -10,12 +10,12 @@ Expect our pure-PyTorch parallel scan to be **roughly 10-50x slower** than
 HF's path on a GPU (HF dispatches to the ``mamba_ssm`` CUDA kernels when
 available) and **much closer** on CPU (where HF also falls back to a slow
 PyTorch loop). The point of this benchmark isn't to win — it's to have a
-number we can improve in Phase 3 (fused Triton decode kernel).
+baseline number the fused Triton decode kernel is measured against.
 
 Example::
 
-    python benchmarks/week2.py --device cuda --new-tokens 128 \\
-        --output benchmarks/results/week2.gpu.json
+    python benchmarks/parallel_scan.py --device cuda --new-tokens 128 \\
+        --output benchmarks/results/parallel_scan.gpu.json
 """
 
 from __future__ import annotations
@@ -176,7 +176,7 @@ def _render_markdown(results: list[RunResult]) -> str:
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Week 2 tok/s benchmark: ours vs HF Mamba-130m.")
+    p = argparse.ArgumentParser(description="Parallel-scan tok/s benchmark: ours vs HF Mamba-130m.")
     p.add_argument("--model", default="state-spaces/mamba-130m-hf")
     p.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda"])
     p.add_argument("--dtype", default="float32", choices=["float32", "float16", "bfloat16"])

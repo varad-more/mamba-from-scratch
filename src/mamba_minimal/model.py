@@ -225,7 +225,7 @@ class MambaBlock(nn.Module):
         )
 
     # ------------------------------------------------------------------
-    # State-carrying inference path (Phase 2).
+    # State-carrying inference path.
     #
     # The public ``forward`` above stays backward-compatible (legacy scan,
     # stateless, softplus-inside-scan). Everything below is the new path

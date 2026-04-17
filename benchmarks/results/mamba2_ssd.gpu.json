@@ -5,7 +5,7 @@
     "prompt_tokens": 128,
     "new_tokens": 64,
     "use_triton": false,
-    "output": "benchmarks/results/week4.gpu.json"
+    "output": "benchmarks/results/mamba2_ssd.gpu.json"
   },
   "results": [
     {

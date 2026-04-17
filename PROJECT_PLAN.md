@@ -14,7 +14,7 @@ This project should demonstrate that you can move across the full stack:
 - benchmarking and profiling,
 - and clear technical communication.
 
-**Timeline:** ~3 weeks part-time  
+**Timeline:** part-time, multi-stage  
 **Primary hardware:** Colab T4  
 **Stretch area:** Mamba-2 SSD
 
@@ -435,7 +435,7 @@ This milestone demonstrates algorithmic reasoning: you are not just writing code
 ### Goal
 Build a Triton implementation that reduces memory traffic and improves performance.
 
-### Phase A — Unfused baseline
+### Stage A — Unfused baseline
 Build separate kernels for:
 - discretization
 - scan
@@ -443,11 +443,11 @@ Build separate kernels for:
 
 This is the debugging baseline.
 
-### Phase B — Fused kernel
+### Stage B — Fused kernel
 Fuse discretization, scan, and output into one kernel.  
 Keep intermediates in registers/SRAM whenever possible.
 
-### Phase C — Practical scaling
+### Stage C — Practical scaling
 - parallelize over `D`
 - support realistic shapes
 - add autotune knobs for chunk/block sizes
@@ -595,20 +595,20 @@ This is bonus depth. It is useful only if the core repo is already clean, correc
 
 ---
 
-## 12. Weekly Exit Gates
+## 12. Exit Gates
 
-### End of Week 1
+### Correctness milestone
 - SSM notebook complete
 - selective scan working
 - Mamba block parity working
 - parallel scan implemented and validated
 
-### End of Week 2
+### Kernel milestone
 - Triton kernel working
 - fused vs unfused benchmark available
 - roofline and MBU analysis complete
 
-### End of Week 3
+### Polish milestone
 - inference comparison complete
 - repo polished
 - README public-ready

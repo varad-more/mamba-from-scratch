@@ -1,6 +1,8 @@
 # Mamba From Scratch
 
-A from-scratch implementation of the core ideas behind **Mamba**: continuous-time state space models, selective scan, parallel scan, a fused Triton kernel, parity checks against the official HuggingFace model, and GPU benchmark / profiling analysis.
+A from-scratch implementation of the core ideas behind **Mamba**: continuous-time state space models, selective scan, parallel scan, a fused Triton kernel, Mamba-2 SSD, parity checks against the official HuggingFace model, and GPU benchmark / profiling analysis.
+
+> **Educational reimplementation.** For production use, prefer [`state-spaces/mamba`](https://github.com/state-spaces/mamba). This repo's goal is clarity, correctness, and honest comparison against that reference — not replacing it.
 
 This repo is both:
 - a **learning artifact** you can read end-to-end, and
@@ -10,11 +12,12 @@ This repo is both:
 
 ## What this proves
 
-- Rebuilt selective scan from scratch in PyTorch and validated parity against the **`mamba_ssm` reference** (CPU fp32: bit-exact; CUDA fused fp32/fp16: within tolerance)
-- Loaded pretrained `state-spaces/mamba-130m-hf` weights into the from-scratch block and drove full-model generation through the naive scan, **token-exact** vs the unpatched HuggingFace baseline
-- Built and benchmarked a fused Triton kernel for selective scan, achieving **74-121x speedup** over the PyTorch reference on an A10G GPU
-- Analyzed memory bandwidth utilization and roofline positioning, confirming selective scan is **memory-bound**
-- Compared Mamba and GPT-2 inference behavior on GPU, measuring TTFT, decode throughput, and memory scaling
+- Rebuilt selective scan from scratch in PyTorch, bit-exact vs `mamba_ssm.selective_scan_ref` at fp32, within tolerance vs the CUDA-fused kernel at fp16.
+- Loaded pretrained `state-spaces/mamba-130m-hf` weights into the from-scratch block and drove full-model generation through the naive scan, **token-exact** vs the unpatched HuggingFace baseline.
+- Built a fused Triton decode kernel. **2.3–2.7× vs a pure-PyTorch equivalent** for the isolated SSM step (honest MBU: 1.5% at B=1 → 12% at B=8 of the A10G's 600 GB/s peak — launch-latency bound at Mamba-130m shapes).
+- Implemented Mamba-2 via chunked SSD; prefill is O(L) and stays flat through pl=1024 on A10G.
+- Cross-engine benchmark suite (minimamba-mamba1/2, `mamba_ssm`-mamba1/2, Pythia-160m/2.8b) with CSV + plots. At pl=4096, minimamba-mamba2 beats Pythia-2.8b prefill **2.8×** on pure einsum — the point of Mamba.
+- Honest gap vs `mamba_ssm`: our prefill is 2–5× slower (un-fused conv + dt_bias + softplus + chunk scan); our decode is within 10–20%.
 
 ---
 
@@ -32,7 +35,7 @@ This repo is both:
 
 ### Reference parity (naive selective scan vs `mamba_ssm`)
 
-Phase 1 anchor: the from-scratch scan must match the authoritative reference.
+Reference parity anchor: the from-scratch scan must match the authoritative reference.
 
 | Check | Setting | Max abs diff |
 |---|---|---:|
@@ -126,7 +129,15 @@ mamba-from-scratch/
 │   ├── benchmark_scan.py           # Scan backend comparison
 │   ├── benchmark_inference.py      # Mamba vs GPT-2 inference
 │   ├── roofline.py                 # Roofline chart generation
-│   └── results/                    # Saved JSON benchmark artifacts
+│   ├── parallel_scan.py            # Our MambaModel vs HF Mamba tok/s
+│   ├── decode_kernel.py            # Triton decode kernel microbench
+│   ├── mamba2_ssd.py               # Mamba-1 vs Mamba-2 (ours vs mamba_ssm)
+│   ├── suite.py                    # Cross-engine benchmark harness
+│   ├── plot_suite.py               # Suite CSV → plots
+│   └── results/                    # Saved JSON/CSV benchmark artifacts
+├── docs/
+│   ├── decode_kernel_profiling.md  # Triton decode kernel + MBU analysis
+│   └── cross_engine_benchmarks.md  # Cross-engine suite results + analysis
 ├── tests/                          # 44 tests (40 pass, 4 gpu-skipped on CPU)
 ├── scripts/                        # Parity, validation, figure rendering
 └── figures/                        # Generated charts

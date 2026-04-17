@@ -3,7 +3,7 @@
 Bit-exact at fp32 within roundoff; tight tolerances at fp16 / bf16. We
 reference against the naive PyTorch path applied to a single-timestep
 tensor — which is the authoritative slow-but-correct oracle (validated
-against ``mamba_ssm`` in Phase 1).
+against ``mamba_ssm``).
 
 The kernel is CUDA-only; this whole module is skipped on CPU.
 """
@@ -127,7 +127,7 @@ def test_decode_triton_matches_reference_low_precision(dtype: torch.dtype) -> No
 def test_decode_triton_matches_selective_scan_naive_at_l1() -> None:
     """One decode step must agree with selective_scan_naive run at L=1.
 
-    This ties the kernel back to the Phase-1 oracle (``scan_naive``,
+    This ties the kernel back to the naive-scan oracle (``scan_naive``,
     which is bit-exact vs ``mamba_ssm.selective_scan_ref``).
     """
 

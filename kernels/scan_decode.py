@@ -10,8 +10,7 @@ Mamba's autoregressive decode reduces to a trivial recurrence per
 
 Arithmetic intensity is tiny — ~16 multiplies + a reduction per output
 scalar, against ~4 * state_size fp-loads. This kernel is **memory-bound
-by construction**, which is the point: Phase 3 is where we care about MBU,
-not FLOPs.
+by construction**, which is the point: we care about MBU, not FLOPs.
 
 Launch shape:
   grid = (d_inner, batch)

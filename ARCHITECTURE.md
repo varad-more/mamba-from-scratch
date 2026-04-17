@@ -148,9 +148,9 @@ Key rule: **reference path remains the correctness anchor** and every optimized 
 
 ---
 
-## 7) Implemented refactor phases
+## 7) Implemented refactor steps
 
-## Phase 1 — Capability surface
+### Capability surface
 
 - Introduce `src/mamba_minimal/backend/types.py` for shared metadata dataclasses.
 - Move/centralize capability checks into `backend/capability.py`.
@@ -160,7 +160,7 @@ Key rule: **reference path remains the correctness anchor** and every optimized 
 - one canonical API for “is fused path supported?”
 - no behavior regressions in existing tests
 
-## Phase 2 — Backend policy module
+### Backend policy module
 
 - Add `backend/policy.py` with explicit modes:
   - `auto` (prefer fused if supported)
@@ -172,7 +172,7 @@ Key rule: **reference path remains the correctness anchor** and every optimized 
 - backend choice is explicit and testable
 - failures are actionable instead of silent
 
-## Phase 3 — Validation/reporting integration
+### Validation/reporting integration
 
 - Include backend capability + selected policy metadata in benchmark/parity JSON.
 - Standardize result schema across scripts.
