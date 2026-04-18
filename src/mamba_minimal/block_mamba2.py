@@ -15,7 +15,6 @@ directly — the on-disk layout is the same as the HF release.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -285,7 +284,7 @@ class Mamba2Model(nn.Module):
         if self.lm_head is not None:
             self.lm_head.weight.data.copy_(ref.lm_head.weight.data)
 
-        for i, (dst, src) in enumerate(zip(self.layers, ref.backbone.layers)):
+        for _i, (dst, src) in enumerate(zip(self.layers, ref.backbone.layers)):
             dst.norm_weight.data.copy_(src.norm.weight.data)
             m = dst.mixer
             sm = src.mixer

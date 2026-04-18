@@ -57,7 +57,8 @@ def _peak(device):
 def bench_ours(model, arch: str, prompt_ids: torch.Tensor, new_tokens: int, device) -> RunResult:
     # Warmup.
     _ = generate_native(model, prompt_ids, max_new_tokens=min(4, new_tokens))
-    _sync(device); _reset(device)
+    _sync(device)
+    _reset(device)
 
     t0 = time.perf_counter()
     _, state = model(prompt_ids, return_state=True)
@@ -92,7 +93,8 @@ def bench_reference(model: Any, arch: str, prompt_ids: torch.Tensor, new_tokens:
     if arch == "mamba2":
         # mamba_ssm MambaLMHeadModel: prefill = forward; generate = .generate(max_length=...)
         _ = model.generate(prompt_ids, max_length=prompt_ids.shape[1] + min(4, new_tokens))
-        _sync(device); _reset(device)
+        _sync(device)
+        _reset(device)
         t0 = time.perf_counter()
         _ = model(prompt_ids)
         _sync(device)
@@ -106,7 +108,8 @@ def bench_reference(model: Any, arch: str, prompt_ids: torch.Tensor, new_tokens:
     else:
         # HF transformers Mamba-1.
         _ = model.generate(prompt_ids, max_new_tokens=min(4, new_tokens), do_sample=False)
-        _sync(device); _reset(device)
+        _sync(device)
+        _reset(device)
         t0 = time.perf_counter()
         _ = model(prompt_ids)
         _sync(device)
@@ -171,21 +174,24 @@ def main() -> None:
                     device=device, dtype=dtype, use_triton=args.use_triton)
     rows.append(bench_ours(m1, "mamba1", prompt_ids, args.new_tokens, device))
     print(asdict(rows[-1]))
-    del m1; torch.cuda.empty_cache()
+    del m1
+    torch.cuda.empty_cache()
 
     # ---- minimamba Mamba-2 ----
     print("\n[2/4] minimamba Mamba-2")
     m2 = load_model("state-spaces/mamba2-130m", arch="mamba2", device=device, dtype=dtype)
     rows.append(bench_ours(m2, "mamba2", prompt_ids, args.new_tokens, device))
     print(asdict(rows[-1]))
-    del m2; torch.cuda.empty_cache()
+    del m2
+    torch.cuda.empty_cache()
 
     # ---- HF Mamba-1 ----
     print("\n[3/4] HF Mamba-1")
     r1 = AutoModelForCausalLM.from_pretrained("state-spaces/mamba-130m-hf").to(device=device, dtype=dtype).eval()
     rows.append(bench_reference(r1, "mamba1", prompt_ids, args.new_tokens, device))
     print(asdict(rows[-1]))
-    del r1; torch.cuda.empty_cache()
+    del r1
+    torch.cuda.empty_cache()
 
     # ---- mamba_ssm Mamba-2 ----
     print("\n[4/4] mamba_ssm Mamba-2")

@@ -675,7 +675,7 @@ class MambaModel(nn.Module):
             _copy("embeddings.weight", state_dict[emb_key])
 
         # Per-layer: norm + mixer.
-        for i, layer in enumerate(self.layers):
+        for i, _layer in enumerate(self.layers):
             norm_key = f"backbone.layers.{i}.norm.weight"
             if norm_key not in state_dict:
                 missing.append(norm_key)
