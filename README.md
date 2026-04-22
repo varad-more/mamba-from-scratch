@@ -4,6 +4,10 @@ A from-scratch PyTorch implementation of **Mamba-1** and **Mamba-2** — the sel
 
 > **Educational reimplementation.** For production use, prefer [`state-spaces/mamba`](https://github.com/state-spaces/mamba). This repo's goal is **clarity, correctness, and honest comparison** against that reference — not replacing it.
 
+![Prefill latency vs prompt length — Mamba-2 stays flat while Pythia-2.8b grows quadratically](benchmarks/results/latency_vs_seqlen.png)
+
+> At `pl=4096`, our Mamba-2 prefill (161 ms) beats Pythia-2.8b (449 ms) by **2.8×** on pure einsum — no fused kernel, no CUDA graphs. That's the point of Mamba.
+
 ---
 
 ## Table of contents
@@ -41,6 +45,11 @@ All numbers reproduced by `benchmarks/suite.py` — raw CSV at
 methodology and analysis in
 [`docs/cross_engine_benchmarks.md`](docs/cross_engine_benchmarks.md) and
 [`docs/decode_kernel_profiling.md`](docs/decode_kernel_profiling.md).
+
+**Benchmark environment:** NVIDIA A10G (24 GB, 600 GB/s peak), Python 3.11,
+PyTorch ≥2.4, CUDA 12.x (tested against the cu122/torch2.4 `mamba_ssm` 2.2.2
+wheel referenced in the quickstart). Reference oracle: `mamba_ssm` 2.2.2 +
+`causal_conv1d` 1.4.0.
 
 **Matrix:** 6 engines × batches {1, 4} × prompt lengths {128, 1024, 4096} × 128
 generated tokens. CUDA-event timing, 1 warmup + median-of-3. 35/36 configs
