@@ -1,0 +1,17 @@
+[
+  {
+    "engine": "hf",
+    "model_name": "state-spaces/mamba-130m-hf",
+    "dataset": "wikitext-2-raw-v1",
+    "device": "mps",
+    "machine": "Darwin 25.5.0 (arm64)",
+    "dtype": "float32",
+    "window": 1024,
+    "n_windows": 281,
+    "total_tokens": 287744,
+    "predicted_tokens": 287463,
+    "nll_sum": 899832.6638183594,
+    "perplexity": 22.87982674161751,
+    "elapsed_s": 315.16298516699953
+  }
+]

@@ -1,0 +1,32 @@
+[
+  {
+    "engine": "minimamba",
+    "model_name": "state-spaces/mamba-130m-hf",
+    "dataset": "wikitext-2-raw-v1",
+    "device": "mps",
+    "machine": "Darwin 25.5.0 (arm64)",
+    "dtype": "float32",
+    "window": 1024,
+    "n_windows": 32,
+    "total_tokens": 32768,
+    "predicted_tokens": 32736,
+    "nll_sum": 105101.47631835938,
+    "perplexity": 24.793408821607336,
+    "elapsed_s": 2586.756660666
+  },
+  {
+    "engine": "hf",
+    "model_name": "state-spaces/mamba-130m-hf",
+    "dataset": "wikitext-2-raw-v1",
+    "device": "mps",
+    "machine": "Darwin 25.5.0 (arm64)",
+    "dtype": "float32",
+    "window": 1024,
+    "n_windows": 32,
+    "total_tokens": 32768,
+    "predicted_tokens": 32736,
+    "nll_sum": 105101.47216796875,
+    "perplexity": 24.793405678207858,
+    "elapsed_s": 38.17474875000062
+  }
+]

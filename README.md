@@ -31,6 +31,7 @@ A from-scratch PyTorch implementation of **Mamba-1** and **Mamba-2** — the sel
 
 - **Selective scan, rebuilt and verified.** `selective_scan_naive` is **bit-exact** vs `mamba_ssm.selective_scan_ref` at fp32, and within `< 2e-3` vs the CUDA-fused reference at fp16.
 - **Pretrained parity.** `state-spaces/mamba-130m-hf` weights load into our `MambaBlock`; full-model generation through our naive scan is **token-exact** vs the unpatched HuggingFace baseline.
+- **Quality parity.** WikiText-2 perplexity through our full model is **24.7934 vs 24.7934** for the unpatched HF reference on identical token windows — `|Δppl| = 3e-6` at fp32. Logit parity, extended to a corpus-level quality metric.
 - **Fused Triton decode kernel.** 2.3–2.7× over a pure-PyTorch equivalent for the isolated SSM step. Honest MBU: **1.5% at B=1 → 12% at B=8** of the A10G's 600 GB/s peak — launch-latency bound at Mamba-130m shapes.
 - **Mamba-2 via SSD.** Chunked structured-state-space-duality prefill is `O(L)` in both compute and memory; our prefill stays flat through `pl=1024` and scales linearly to `pl=4096`.
 - **Cross-engine benchmark suite.** 6 engines × 2 batches × 3 prompt lengths. At `pl=4096`, our Mamba-2 beats Pythia-2.8b prefill **2.8×** on pure einsum — the point of Mamba.
@@ -98,6 +99,12 @@ Prefill time in milliseconds (lower is better):
    (~4× per 4× in length). Our Mamba-2 at pl=4096 (161 ms) **beats
    Pythia-2.8b (449 ms) by 2.8×** on pure einsum (no fused kernel). This is
    the point of Mamba.
+3. **Scaling rates per 4× in length** (128→1024, 1024→4096): our Mamba-2
+   grows **1.02× then 3.5×**; `mamba_ssm` Mamba-2 grows 1.04× then 1.25×;
+   Pythia-2.8b grows 5.3× then 4.1×. The crossover where our Mamba-2
+   overtakes Pythia-2.8b lies between pl=128 and pl=1024 (≈ pl≈400 by linear
+   interpolation); past it the gap only widens — 2.3× at pl=1024, 2.8× at
+   pl=4096.
 
 ### 3) Peak memory vs prompt length — batch=1
 
@@ -116,8 +123,32 @@ Peak GPU memory in MB (lower is better):
 
 Mamba-2 stays under 1 GB even at 4k — SSD's state is `O(1)` per head.
 Pythia-2.8b sits at 5.6 GB just for weights and adds KV cache linearly.
+**At pl=4096 our Mamba-2 peaks 9.2× lower than Pythia-2.8b** (954 MB vs
+8,795 MB) and 1.5× lower than Pythia-160m (1,446 MB) — a 130m-class Mamba
+out-memories a 160m-class transformer at 4k context.
 
-### 4) Decode kernel microbench — kernel-in-isolation
+### 4) Recurrent state vs KV cache — the constants behind the curves
+
+Why the memory curves above look the way they do, derived from the model
+configs (fp16, batch 1). A Mamba layer carries a fixed `(d_inner × d_state)`
+SSM state plus a `(d_conv − 1)`-step conv buffer; a transformer layer appends
+`2 × d_model` elements of K/V per token, forever.
+
+| Model | State per layer | Total inference state | Growth |
+|---|---|---:|---|
+| Mamba-1 130m | `1536×16` SSM + `1536×3` conv = 29,184 el | **1.4 MB** | `O(1)` |
+| Mamba-2 130m | `24×64×128` SSM + `1792×3` conv = 201,984 el | **9.7 MB** | `O(1)` |
+| Pythia-160m | `2×768` el/token × 12 layers | 36.9 KB/token → 151 MB @ 4k | `O(L)` |
+| Pythia-2.8b | `2×2560` el/token × 32 layers | 327.7 KB/token → 1.34 GB @ 4k | `O(L)` |
+
+**Crossover points:** Pythia-160m's KV cache outgrows Mamba-1's *entire*
+recurrent state after **38 tokens** of context (Mamba-2's after 263 tokens);
+Pythia-2.8b's passes Mamba-2's after **30 tokens**. At pl=32768 the KV caches
+reach 1.2 GB (160m) and 10.7 GB (2.8b) — while both Mambas still hold the
+same 1.4 / 9.7 MB. Measured peak memory in §3 adds weights + activations on
+top, but this constant-vs-linear gap is the whole story of the curves.
+
+### 5) Decode kernel microbench — kernel-in-isolation
 
 From [`benchmarks/decode_kernel.py`](benchmarks/decode_kernel.py), 1000 iters,
 CUDA events, A10G. Bytes-moved model ≈ `B·D·(20·N + 24)` bytes/step.
@@ -134,7 +165,11 @@ saturate A10G bandwidth at batch 1. End-to-end decode tok/s does **not**
 move with `--use-triton` because decode time is dominated by the four
 `nn.Linear` calls + Python overhead, not the SSM step.
 
-### 5) Reference parity — correctness ladder
+**Batching is free through B=8:** per-step latency is flat from B=1
+(60.5 µs) to B=8 (58.4 µs), so 8× the tokens cost the same wall time —
+effective bandwidth scales 8.7 → 72.4 GB/s.
+
+### 6) Reference parity — correctness ladder
 
 All parity locked at **bit-exact fp32** against `mamba_ssm`:
 
@@ -151,6 +186,26 @@ All parity locked at **bit-exact fp32** against `mamba_ssm`:
 Reproduced by `tests/test_naive_vs_reference.py`,
 `tests/test_official_parity.py`, `scripts/official_parity.py`, and notebooks
 `01_selective_scan_derivation.ipynb` / `02_mamba130m_naive_generate.ipynb`.
+
+### 7) Quality — WikiText-2 perplexity parity
+
+Speed parity is meaningless if the model got worse. From
+[`benchmarks/perplexity.py`](benchmarks/perplexity.py): identical
+WikiText-2 (raw, test) token windows through our `MambaModel` and the
+unpatched HF `MambaForCausalLM`, `mamba-130m-hf` weights, fp32, window 1024,
+no cross-window state. Run on Apple Silicon (MPS); perplexity is
+device-independent at fp32.
+
+| Engine | Tokens | Perplexity |
+|---|---:|---:|
+| **minimamba** (our scan, our weight loader) | 32,768 | **24.793409** |
+| HF reference, same windows | 32,768 | 24.793406 |
+| HF reference, full test split | 287,744 | 22.8798 |
+
+**`|Δppl| = 3e-6`** between our implementation and the reference on identical
+data — the bit-level parity of §6 holds at corpus scale. Raw JSON:
+[`perplexity.mps.json`](benchmarks/results/perplexity.mps.json),
+[`perplexity.hf_full.mps.json`](benchmarks/results/perplexity.hf_full.mps.json).
 
 ---
 
@@ -191,6 +246,7 @@ mamba-from-scratch/
 │   ├── mamba2_ssd.py                        # Mamba-1 vs Mamba-2 (ours vs mamba_ssm)
 │   ├── suite.py                             # Cross-engine benchmark harness
 │   ├── plot_suite.py                        # Suite CSV → plots
+│   ├── perplexity.py                        # WikiText-2 quality parity (ours vs HF)
 │   ├── benchmark_scan.py                    # Scan backend comparison
 │   ├── benchmark_inference.py               # Mamba vs GPT-2 inference
 │   ├── roofline.py                          # Roofline chart generation
@@ -331,6 +387,21 @@ python benchmarks/benchmark_inference.py --device auto \
 python benchmarks/roofline.py \
   --scan-results benchmarks/results/scan_results.gpu.json
 ```
+
+### Perplexity (quality parity)
+
+Runs the same WikiText-2 token windows through our `MambaModel` and the
+unpatched HF `MambaForCausalLM` — needs `.[bench]` plus `datasets`:
+
+```bash
+PYTHONPATH=. python benchmarks/perplexity.py \
+  --model state-spaces/mamba-130m-hf \
+  --window 1024 --max-tokens 32768 --dtype float32 \
+  --output benchmarks/results/perplexity.json
+```
+
+Drop `--max-tokens` to sweep the full test split (slow without the fused
+kernels).
 
 ### Official parity check
 
